@@ -1,4 +1,4 @@
-#include "../include/rpc/rpc_client.h"
+#include "../include/remote/rpc_client.h"
 
 rpc_client::rpc_client(boost::asio::io_service &io_service, const char* address, uint16_t port)
 : io_service_{io_service}

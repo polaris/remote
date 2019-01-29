@@ -1,4 +1,4 @@
-#include "../include/rpc/rpc_client.h"
+#include "../include/remote/rpc_client.h"
 
 #include <boost/asio.hpp>
 
