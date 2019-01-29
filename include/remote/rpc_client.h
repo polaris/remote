@@ -66,7 +66,7 @@ std::future<std::tuple<ReturnValueTypes...>> rpc_client::async_call(const std::s
     msgpack::pack(*buffer, call_id);
     msgpack::pack(*buffer, procedure_name);
     msgpack::pack(*buffer, std::make_tuple(arguments...));
-    socket_.async_send(boost::asio::buffer(buffer->data(), buffer->size()),
+    boost::asio::async_write(socket_, boost::asio::buffer(buffer->data(), buffer->size()),
        [this, call_id, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
            if (ec) {
                // TODO: Handle errors

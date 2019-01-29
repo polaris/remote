@@ -42,7 +42,7 @@ void rpc_server::session::start() {
 
 void rpc_server::session::read() {
     auto self = shared_from_this();
-    socket_.async_receive(boost::asio::buffer(buffer_, 1024), [self](boost::system::error_code ec, std::size_t bytes_received) {
+    socket_.async_read_some(boost::asio::buffer(buffer_, 1024), [self](boost::system::error_code ec, std::size_t bytes_received) {
         if (!ec) {
             msgpack::object_handle result1, result2, result3;
             std::size_t off = 0;
@@ -63,7 +63,7 @@ void rpc_server::session::read() {
 
 void rpc_server::session::write(const std::shared_ptr<msgpack::sbuffer>& buffer) {
     auto self = shared_from_this();
-    socket_.async_send(boost::asio::buffer(buffer->data(), buffer->size()),
+    boost::asio::async_write(socket_, boost::asio::buffer(buffer->data(), buffer->size()),
        [self, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
            if (!ec) {
                self->read();

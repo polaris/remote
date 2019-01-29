@@ -17,7 +17,7 @@ void rpc_client::connect() {
 }
 
 void rpc_client::read() {
-    socket_.async_receive(boost::asio::buffer(buffer_, 1024),
+    socket_.async_read_some(boost::asio::buffer(buffer_, 1024),
         [this](boost::system::error_code ec, std::size_t bytes_received) {
             if (!ec) {
                 msgpack::object_handle result1, result2;
