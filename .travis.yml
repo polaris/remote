@@ -7,6 +7,16 @@ compiler:
 os:
   - linux
 
+dist: xenial
+
+addons:
+  apt:
+    packages: libboost-all-dev
+
+before_install:
+  - sudo add-apt-repository ppa:boost-latest/ppa
+  - sudo apt-get update -qq
+
 before_script:
   - mkdir build
   - cd build
