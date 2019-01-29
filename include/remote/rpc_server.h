@@ -39,7 +39,7 @@ private:
 
         boost::asio::ip::tcp::socket socket_;
         rpc_server& server_;
-        uint8_t buffer_[1024];
+        msgpack::unpacker unpacker_;
     };
 };
 

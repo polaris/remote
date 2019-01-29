@@ -34,7 +34,7 @@ private:
     const uint16_t port_;
     uint32_t next_call_id_;
     std::unordered_map<uint32_t, std::function<void (const msgpack::object&)>> ongoing_calls_;
-    uint8_t buffer_[1024];
+    msgpack::unpacker unpacker_;
 };
 
 template <typename... ReturnsValueTypes, typename... ArgumentTypes>

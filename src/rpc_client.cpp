@@ -5,8 +5,8 @@ rpc_client::rpc_client(boost::asio::io_service &io_service, const char* address,
 , socket_{io_service}
 , address_{address}
 , port_{port}
-, next_call_id_{0}
-, buffer_{0} {
+, next_call_id_{0} {
+    unpacker_.reserve_buffer(1024);
 }
 
 void rpc_client::connect() {
@@ -17,17 +17,18 @@ void rpc_client::connect() {
 }
 
 void rpc_client::read() {
-    socket_.async_read_some(boost::asio::buffer(buffer_, 1024),
+    socket_.async_read_some(boost::asio::buffer(unpacker_.buffer(), 1024),
         [this](boost::system::error_code ec, std::size_t bytes_received) {
             if (!ec) {
-                msgpack::object_handle result;
-                auto b = reinterpret_cast<const char*>(buffer_);
-                msgpack::unpack(result, b, bytes_received);
-                const auto obj = result.get().as<std::tuple<uint32_t, msgpack::object>>();
-                const auto call_id = std::get<0>(obj);
-                if (ongoing_calls_.find(call_id) != ongoing_calls_.end()) {
-                    ongoing_calls_[call_id](std::get<1>(obj));
-                    ongoing_calls_.erase(call_id);
+                unpacker_.buffer_consumed(bytes_received);
+                msgpack::unpacked result;
+                while (unpacker_.next(result)) {
+                    const auto obj = result.get().as<std::tuple<uint32_t, msgpack::object>>();
+                    const auto call_id = std::get<0>(obj);
+                    if (ongoing_calls_.find(call_id) != ongoing_calls_.end()) {
+                        ongoing_calls_[call_id](std::get<1>(obj));
+                        ongoing_calls_.erase(call_id);
+                    }
                 }
                 read();
             } else if (ec == boost::asio::error::eof) {
