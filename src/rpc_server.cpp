@@ -44,14 +44,12 @@ void rpc_server::session::read() {
     auto self = shared_from_this();
     socket_.async_read_some(boost::asio::buffer(buffer_, 1024), [self](boost::system::error_code ec, std::size_t bytes_received) {
         if (!ec) {
-            msgpack::object_handle result1, result2, result3;
-            std::size_t off = 0;
-            msgpack::unpack(result1, reinterpret_cast<const char*>(self->buffer_), bytes_received, off);
-            msgpack::unpack(result2, reinterpret_cast<const char*>(self->buffer_), bytes_received, off);
-            msgpack::unpack(result3, reinterpret_cast<const char*>(self->buffer_), bytes_received, off);
-            const auto call_id = result1.get().as<uint32_t>();
-            const auto procedure_name = result2.get().as<std::string>();
-            const auto buffer = self->server_.handlers_[procedure_name](call_id, result3.get());
+            msgpack::object_handle result;
+            msgpack::unpack(result, reinterpret_cast<const char*>(self->buffer_), bytes_received);
+            const auto obj = result.get().as<std::tuple<uint32_t, std::string, msgpack::object>>();
+            const auto call_id = std::get<0>(obj);
+            const auto& procedure_name = std::get<1>(obj);
+            const auto buffer = self->server_.handlers_[procedure_name](call_id, std::get<2>(obj));
             self->write(buffer);
         } else if (ec == boost::asio::error::eof) {
             // TODO: Handle errors

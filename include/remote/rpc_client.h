@@ -63,9 +63,9 @@ std::future<std::tuple<ReturnValueTypes...>> rpc_client::async_call(const std::s
     const auto call_id = next_call_id();
     ongoing_calls_[call_id] = std::move(func);
     auto buffer = std::make_shared<msgpack::sbuffer>();
-    msgpack::pack(*buffer, call_id);
-    msgpack::pack(*buffer, procedure_name);
-    msgpack::pack(*buffer, std::make_tuple(arguments...));
+    const auto args = std::make_tuple(arguments...);
+    const auto obj = std::make_tuple(call_id, procedure_name, args);
+    msgpack::pack(*buffer, obj);
     boost::asio::async_write(socket_, boost::asio::buffer(buffer->data(), buffer->size()),
        [this, call_id, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
            if (ec) {
