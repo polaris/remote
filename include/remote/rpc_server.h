@@ -47,10 +47,9 @@ template<typename... ReturnValueTypes, typename... ArgumentTypes>
 void rpc_server::add_procedure(const char *procedure_name, std::function<std::tuple<ReturnValueTypes...> (ArgumentTypes...)> handler) {
     handlers_[procedure_name] = [handler](uint32_t call_id, const msgpack::object& obj) {
         try {
-            const auto args = obj.as<std::tuple<ArgumentTypes...>>();
-            const auto tuple = detail::apply_from_tuple(handler, args);
             auto buffer = std::make_shared<msgpack::sbuffer>();
-            msgpack::pack(*buffer, std::make_tuple(call_id, tuple));
+            msgpack::pack(*buffer, std::make_tuple(call_id,
+                    detail::apply_from_tuple(handler, obj.as<std::tuple<ArgumentTypes...>>())));
             return buffer;
         } catch (const std::exception& ex) {
             // TODO: Handle exceptions
