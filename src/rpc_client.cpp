@@ -23,18 +23,19 @@ void rpc_client::read() {
                 unpacker_.buffer_consumed(bytes_received);
                 msgpack::unpacked result;
                 while (unpacker_.next(result)) {
-                    const auto obj = result.get().as<std::tuple<uint32_t, msgpack::object>>();
+                    const auto obj = result.get().as<std::tuple<uint32_t, bool, msgpack::object>>();
                     const auto call_id = std::get<0>(obj);
+                    const auto success = std::get<1>(obj);
                     if (ongoing_calls_.find(call_id) != ongoing_calls_.end()) {
-                        ongoing_calls_[call_id](std::get<1>(obj));
+                        ongoing_calls_[call_id](success, std::get<2>(obj));
                         ongoing_calls_.erase(call_id);
                     }
                 }
                 read();
             } else if (ec == boost::asio::error::eof) {
-                // TODO: handle disconnect
+                socket_.close();
             } else {
-                // TODO: handle all other error
+                // TODO: Log error message
             }
         });
 }

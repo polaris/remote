@@ -33,7 +33,7 @@ private:
     const std::string address_;
     const uint16_t port_;
     uint32_t next_call_id_;
-    std::unordered_map<uint32_t, std::function<void (const msgpack::object&)>> ongoing_calls_;
+    std::unordered_map<uint32_t, std::function<void (bool, const msgpack::object&)>> ongoing_calls_;
     msgpack::unpacker unpacker_;
 };
 
@@ -52,9 +52,13 @@ std::future<std::tuple<ReturnValueTypes...>> rpc_client::async_call(const std::s
         read();
     }
     auto promise = std::make_shared<std::promise<std::tuple<ReturnValueTypes...>>>();
-    const auto func = [promise](const msgpack::object& obj) {
+    const auto func = [promise](bool success, const msgpack::object& obj) {
         try {
-            promise->set_value(obj.as<std::tuple<ReturnValueTypes...>>());
+            if (success) {
+                promise->set_value(obj.as<std::tuple<ReturnValueTypes...>>());
+            } else {
+                throw std::runtime_error{obj.as<std::string>()};
+            }
         } catch (...) {
             promise->set_exception(std::current_exception());
         }
@@ -64,10 +68,15 @@ std::future<std::tuple<ReturnValueTypes...>> rpc_client::async_call(const std::s
     auto buffer = std::make_shared<msgpack::sbuffer>();
     msgpack::pack(*buffer, std::make_tuple(call_id, procedure_name, std::make_tuple(arguments...)));
     boost::asio::async_write(socket_, boost::asio::buffer(buffer->data(), buffer->size()),
-       [this, call_id, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
-           if (ec) {
-               // TODO: Handle errors
-           }
+       [this, call_id, promise, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
+            try {
+                if (ec) {
+                    throw std::runtime_error{ec.message()};
+                }
+            } catch (...) {
+                ongoing_calls_.erase(call_id);
+                promise->set_exception(std::current_exception());
+            }
        });
     return promise->get_future();
 }

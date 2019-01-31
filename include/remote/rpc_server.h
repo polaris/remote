@@ -36,6 +36,8 @@ private:
     private:
         void read();
         void write(const std::shared_ptr<msgpack::sbuffer> &buffer);
+        std::shared_ptr<msgpack::sbuffer> handle_call(const msgpack::unpacked& result);
+        std::shared_ptr<msgpack::sbuffer> report_error(unsigned int call_id, const std::exception &ex) const;
 
         boost::asio::ip::tcp::socket socket_;
         rpc_server& server_;
@@ -45,15 +47,11 @@ private:
 
 template<typename... ReturnValueTypes, typename... ArgumentTypes>
 void rpc_server::add_procedure(const char *procedure_name, std::function<std::tuple<ReturnValueTypes...> (ArgumentTypes...)> handler) {
-    handlers_[procedure_name] = [handler](uint32_t call_id, const msgpack::object& obj) {
-        try {
-            auto buffer = std::make_shared<msgpack::sbuffer>();
-            msgpack::pack(*buffer, std::make_tuple(call_id,
-                    detail::apply_from_tuple(handler, obj.as<std::tuple<ArgumentTypes...>>())));
-            return buffer;
-        } catch (const std::exception& ex) {
-            // TODO: Handle exceptions
-        }
+    handlers_[procedure_name] = [handler](uint32_t call_id, const msgpack::object& args) {
+        auto buffer = std::make_shared<msgpack::sbuffer>();
+        const auto result = detail::apply_from_tuple(handler, args.as<std::tuple<ArgumentTypes...>>());
+        msgpack::pack(*buffer, std::make_tuple(call_id, true, result));
+        return buffer;
     };
 }
 
