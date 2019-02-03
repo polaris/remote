@@ -1,5 +1,5 @@
 # remote
-An RPC library for C++
+A simple RPC library for C++
 
 ### Dependencies
 
