@@ -16,7 +16,8 @@ add_library(remote STATIC
         include/remote/rpc_client.h
         src/rpc_server.cpp
         include/remote/rpc_server.h
-        include/remote/detail/apply_from_tuple.h)
+        include/remote/detail/apply_from_tuple.h
+        include/remote/detail/then.h)
 target_compile_options(remote PRIVATE "-Wall")
 
 add_executable(client example/client.cpp)
