@@ -1,6 +1,8 @@
 #ifndef RPC_RPC_CLIENT_H
 #define RPC_RPC_CLIENT_H
 
+#include "detail/then.h"
+
 #include <msgpack.hpp>
 
 #include <boost/asio.hpp>
@@ -13,6 +15,63 @@
 #include <tuple>
 #include <unordered_map>
 
+template <typename... ReturnValueTypes>
+class rpc_future {
+public:
+    rpc_future(boost::asio::io_service& io_service, std::future<std::tuple<ReturnValueTypes...>> future);
+
+    std::tuple<ReturnValueTypes...> get();
+
+    void wait();
+
+    template<typename Rep, typename Period>
+    std::future_status wait_for(const std::chrono::duration<Rep, Period>& duration);
+
+    template<typename Clock, typename Duration>
+    std::future_status wait_until(const std::chrono::time_point<Clock, Duration>& time_point);
+
+    template<typename Function>
+    std::future<typename std::result_of<Function(std::future<std::tuple<ReturnValueTypes...>>&)>::type> then(Function&& f);
+
+private:
+    boost::asio::io_service& io_service_;
+    std::future<std::tuple<ReturnValueTypes...>> future_;
+};
+
+template<typename... ReturnValueTypes>
+std::tuple<ReturnValueTypes...> rpc_future<ReturnValueTypes...>::get() {
+    return future_.get();
+}
+
+template<typename... ReturnValueTypes>
+rpc_future<ReturnValueTypes...>::rpc_future(boost::asio::io_service& io_service, std::future<std::tuple<ReturnValueTypes...>> future)
+: io_service_{io_service}
+, future_{std::move(future)} {
+}
+
+template<typename... ReturnValueTypes>
+void rpc_future<ReturnValueTypes...>::wait() {
+    future_.wait();
+}
+
+template<typename... ReturnValueTypes>
+template<typename Rep, typename Period>
+std::future_status rpc_future<ReturnValueTypes...>::wait_for(const std::chrono::duration<Rep, Period> &duration) {
+    return future_.wait_for(duration);
+}
+
+template<typename... ReturnValueTypes>
+template<typename Clock, typename Duration>
+std::future_status rpc_future<ReturnValueTypes...>::wait_until(const std::chrono::time_point<Clock, Duration>& time_point) {
+    return future_.wait_until(time_point);
+}
+
+template<typename... ReturnValueTypes>
+template<typename Function>
+std::future<typename std::result_of<Function(std::future<std::tuple<ReturnValueTypes...>>&)>::type> rpc_future<ReturnValueTypes...>::then(Function&& f) {
+    return detail::then(future_, std::forward<Function>(f));
+}
+
 class rpc_client {
 public:
     rpc_client(boost::asio::io_service& io_service, const char* address, uint16_t port);
@@ -21,7 +80,7 @@ public:
     std::tuple<ReturnValueTypes...> call(const std::string &procedure_name, ArgumentTypes... arguments);
 
     template <typename... ReturnValueTypes, typename... ArgumentTypes>
-    std::future<std::tuple<ReturnValueTypes...>> async_call(const std::string &procedure_name, ArgumentTypes... arguments);
+    rpc_future<ReturnValueTypes...> async_call(const std::string &procedure_name, ArgumentTypes... arguments);
 
 private:
     void connect();
@@ -39,14 +98,14 @@ private:
 
 template <typename... ReturnsValueTypes, typename... ArgumentTypes>
 std::tuple<ReturnsValueTypes...>  rpc_client::call(const std::string& procedure_name, ArgumentTypes... arguments) {
-    std::future<std::tuple<ReturnsValueTypes...>> future =
+    rpc_future<ReturnsValueTypes...> future =
             async_call(procedure_name, std::forward<ArgumentTypes>(arguments)...);
     future.wait();
     return future.get();
 }
 
 template <typename... ReturnValueTypes, typename... ArgumentTypes>
-std::future<std::tuple<ReturnValueTypes...>> rpc_client::async_call(const std::string& procedure_name, ArgumentTypes... arguments) {
+rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& procedure_name, ArgumentTypes... arguments) {
     if (!socket_.is_open()) {
         connect();
         read();
@@ -78,7 +137,7 @@ std::future<std::tuple<ReturnValueTypes...>> rpc_client::async_call(const std::s
                 promise->set_exception(std::current_exception());
             }
        });
-    return promise->get_future();
+    return rpc_future<ReturnValueTypes...>{io_service_, promise->get_future()};
 }
 
 #endif //RPC_RPC_CLIENT_H

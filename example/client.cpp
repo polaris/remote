@@ -20,8 +20,8 @@ int main() {
 
         std::cout << "on main thread " << std::this_thread::get_id() << std::endl;
 
-        std::future<std::tuple<int, std::string>> foo_result = c.async_call<int, std::string>("foo", 123);
-        const auto t1 = detail::then(foo_result, [&io_mutex](std::future<std::tuple<int, std::string>>& res) {
+        rpc_future<int, std::string> foo_result = c.async_call<int, std::string>("foo", 123);
+        auto t1 = foo_result.then([&io_mutex](std::future<std::tuple<int, std::string>>& res) {
             std::lock_guard<std::mutex> guard{io_mutex};
             std::cout << "on t1 thread " << std::this_thread::get_id() << std::endl;
             try {
@@ -32,8 +32,8 @@ int main() {
             }
         });
 
-        std::future<std::tuple<double>> sin_result = c.async_call<double>("sin", 3.14);
-        const auto t2 = detail::then(sin_result, [&io_mutex](std::future<std::tuple<double>>& res) {
+        rpc_future<double> sin_result = c.async_call<double>("sin", 3.14);
+        auto t2 = sin_result.then([&io_mutex](std::future<std::tuple<double>>& res) {
             std::lock_guard<std::mutex> guard{io_mutex};
             std::cout << "on t2 thread " << std::this_thread::get_id() << std::endl;
             try {
