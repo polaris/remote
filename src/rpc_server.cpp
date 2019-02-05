@@ -1,6 +1,5 @@
 #include "../include/remote/rpc_server.h"
 
-#include <iostream>
 #include <tuple>
 
 rpc_server::rpc_server(boost::asio::io_service &io_service, const char* address, uint16_t port)
