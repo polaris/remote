@@ -116,7 +116,7 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& proced
         read();
     }
     auto promise = std::make_shared<std::promise<std::tuple<ReturnValueTypes...>>>();
-    const auto func = [promise](bool success, const msgpack::object& obj) {
+    const auto response_handler = [promise](bool success, const msgpack::object& obj) {
         try {
             if (success) {
                 promise->set_value(obj.as<std::tuple<ReturnValueTypes...>>());
@@ -128,7 +128,7 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& proced
         }
     };
     const auto call_id = next_call_id();
-    ongoing_calls_[call_id] = std::move(func);
+    ongoing_calls_[call_id] = std::move(response_handler);
     auto buffer = std::make_shared<msgpack::sbuffer>();
     msgpack::pack(*buffer, std::make_tuple(call_id, procedure_name, std::make_tuple(arguments...)));
     boost::asio::async_write(socket_, boost::asio::buffer(buffer->data(), buffer->size()),
