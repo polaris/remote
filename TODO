@@ -1,5 +1,5 @@
 - TLS/SSL
 - Documentation
 - More examples
-- Use a queue to manage the outgoing calls
 - Add logging
+- Add namespace

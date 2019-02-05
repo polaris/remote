@@ -2,6 +2,7 @@
 #define RPC_RPC_CLIENT_H
 
 #include "detail/then.h"
+#include "detail/call.h"
 
 #include <msgpack.hpp>
 
@@ -90,6 +91,8 @@ public:
 private:
     void connect();
     void read();
+    void write(detail::call_t call);
+    void send_next_call();
     uint32_t next_call_id() { return next_call_id_++; }
 
     boost::asio::io_service& io_service_;
@@ -97,6 +100,7 @@ private:
     const std::string address_;
     const uint16_t port_;
     uint32_t next_call_id_;
+    std::deque<detail::call_t> queue_;
     std::unordered_map<uint32_t, std::function<void (bool, const msgpack::object&)>> ongoing_calls_;
     msgpack::unpacker unpacker_;
 };
@@ -115,8 +119,14 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& proced
         connect();
         read();
     }
+    detail::call_t call;
+    uint32_t call_id = next_call_id();
+    call.call_id = call_id;
+    auto buffer = std::make_shared<msgpack::sbuffer>();
+    call.buffer = buffer;
+    msgpack::pack(*call.buffer, std::make_tuple(call.call_id, procedure_name, std::make_tuple(arguments...)));
     auto promise = std::make_shared<std::promise<std::tuple<ReturnValueTypes...>>>();
-    const auto response_handler = [promise](bool success, const msgpack::object& obj) {
+    call.response_handler = [promise](bool success, const msgpack::object& obj) {
         try {
             if (success) {
                 promise->set_value(obj.as<std::tuple<ReturnValueTypes...>>());
@@ -127,21 +137,18 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& proced
             promise->set_exception(std::current_exception());
         }
     };
-    const auto call_id = next_call_id();
-    ongoing_calls_[call_id] = std::move(response_handler);
-    auto buffer = std::make_shared<msgpack::sbuffer>();
-    msgpack::pack(*buffer, std::make_tuple(call_id, procedure_name, std::make_tuple(arguments...)));
-    boost::asio::async_write(socket_, boost::asio::buffer(buffer->data(), buffer->size()),
-       [this, call_id, promise, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
-            try {
-                if (ec) {
-                    throw std::runtime_error{ec.message()};
-                }
-            } catch (...) {
-                ongoing_calls_.erase(call_id);
-                promise->set_exception(std::current_exception());
+    call.write_handler = [this, call_id, promise, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
+        try {
+            if (ec) {
+                throw std::runtime_error{ec.message()};
             }
-       });
+        } catch (...) {
+            ongoing_calls_.erase(call_id);
+            promise->set_exception(std::current_exception());
+        }
+        send_next_call();
+    };
+    write(std::move(call));
     return rpc_future<ReturnValueTypes...>{io_service_, promise->get_future()};
 }
 

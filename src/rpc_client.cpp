@@ -39,3 +39,21 @@ void rpc_client::read() {
             }
         });
 }
+
+void rpc_client::write(detail::call_t call) {
+    queue_.emplace_back(std::move(call));
+    if (queue_.size() == 1) {
+        send_next_call();
+    }
+}
+
+void rpc_client::send_next_call() {
+    if (queue_.empty()) {
+        return;
+    }
+
+    auto next_call = queue_.front();
+    ongoing_calls_[next_call.call_id] = std::move(next_call.response_handler);
+    queue_.pop_front();
+    boost::asio::async_write(socket_, boost::asio::buffer(next_call.buffer->data(), next_call.buffer->size()), next_call.write_handler);
+}
