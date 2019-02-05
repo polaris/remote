@@ -69,7 +69,12 @@ std::future_status rpc_future<ReturnValueTypes...>::wait_until(const std::chrono
 template<typename... ReturnValueTypes>
 template<typename Function>
 std::future<typename std::result_of<Function(std::future<std::tuple<ReturnValueTypes...>>&)>::type> rpc_future<ReturnValueTypes...>::then(Function&& f) {
-    return detail::then(future_, std::forward<Function>(f));
+    auto g = [this, f](std::future<std::tuple<ReturnValueTypes...>>& fut) {
+        boost::asio::post(io_service_, [f, fut = std::move(fut)]() {
+            f(const_cast<std::future<std::tuple<ReturnValueTypes...>>&>(fut));
+        });
+    };
+    return detail::then(future_, std::move(g));
 }
 
 class rpc_client {
