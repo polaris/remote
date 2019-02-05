@@ -27,3 +27,9 @@ target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES
 add_executable(server example/server.cpp)
 target_include_directories(server SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS})
 target_link_libraries(server PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES})
+
+install(TARGETS ${CMAKE_PROJECT_NAME}
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+install(DIRECTORY include/remote DESTINATION include)
