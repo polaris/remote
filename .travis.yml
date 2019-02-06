@@ -12,6 +12,14 @@ dist: xenial
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install libboost-all-dev -y
+  - git clone git@github.com:msgpack/msgpack-c.git
+  - cd msgpack-c
+  - git checkout tags/cpp-3.1.1
+  - mkdir build
+  - cd build
+  - cmake -DMSGPACK_CXX17=ON .
+  - make
+  - sudo make install
 
 before_script:
   - mkdir build
