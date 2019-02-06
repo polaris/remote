@@ -10,7 +10,6 @@ os:
 dist: xenial
 
 before_install:
-  - sudo add-apt-repository ppa:boost-latest/ppa -y
   - sudo apt-get update -qq
   - sudo apt-get install libboost-all-dev -y
 
