@@ -27,8 +27,10 @@ void rpc_client::read() {
                     const auto call_id = std::get<0>(obj);
                     const auto success = std::get<1>(obj);
                     if (ongoing_calls_.find(call_id) != ongoing_calls_.end()) {
-                        ongoing_calls_[call_id](success, std::get<2>(obj));
+                        ongoing_calls_[call_id]->response_handler(success, std::get<2>(obj));
                         ongoing_calls_.erase(call_id);
+                    } else {
+                        // TODO: Log error message
                     }
                 }
                 read();
@@ -40,8 +42,8 @@ void rpc_client::read() {
         });
 }
 
-void rpc_client::write(detail::call_t call) {
-    queue_.emplace_back(std::move(call));
+void rpc_client::write(const std::shared_ptr<detail::call_t>& call) {
+    queue_.emplace_back(call);
     if (queue_.size() == 1) {
         send_next_call();
     }
@@ -53,7 +55,15 @@ void rpc_client::send_next_call() {
     }
 
     auto next_call = queue_.front();
-    ongoing_calls_[next_call.call_id] = std::move(next_call.response_handler);
     queue_.pop_front();
-    boost::asio::async_write(socket_, boost::asio::buffer(next_call.buffer->data(), next_call.buffer->size()), next_call.write_handler);
+    const uint32_t call_id = next_call->call_id;
+    ongoing_calls_[next_call->call_id] = next_call;
+    boost::asio::async_write(socket_, boost::asio::buffer(next_call->buffer.data(), next_call->buffer.size()),
+            [this, call_id](boost::system::error_code ec, std::size_t bytes_sent) {
+                ongoing_calls_[call_id]->write_handler(ec, bytes_sent);
+                if (ec) {
+                    ongoing_calls_.erase(call_id);
+                }
+                send_next_call();
+            });
 }

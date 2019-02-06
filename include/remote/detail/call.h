@@ -19,7 +19,7 @@ struct call_t {
     uint32_t call_id;
     std::function<void (boost::system::error_code, std::size_t)> write_handler;
     std::function<void (bool, const msgpack::object&)> response_handler;
-    std::shared_ptr<msgpack::sbuffer> buffer;
+    msgpack::sbuffer buffer;
 };
 
 }
