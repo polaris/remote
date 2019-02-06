@@ -122,8 +122,7 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& proced
     detail::call_t call;
     uint32_t call_id = next_call_id();
     call.call_id = call_id;
-    auto buffer = std::make_shared<msgpack::sbuffer>();
-    call.buffer = buffer;
+    call.buffer = std::make_shared<msgpack::sbuffer>();
     msgpack::pack(*call.buffer, std::make_tuple(call.call_id, procedure_name, std::make_tuple(arguments...)));
     auto promise = std::make_shared<std::promise<std::tuple<ReturnValueTypes...>>>();
     call.response_handler = [promise](bool success, const msgpack::object& obj) {
@@ -137,7 +136,7 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string& proced
             promise->set_exception(std::current_exception());
         }
     };
-    call.write_handler = [this, call_id, promise, buffer](boost::system::error_code ec, std::size_t bytes_sent) {
+    call.write_handler = [this, call_id, promise](boost::system::error_code ec, std::size_t bytes_sent) {
         try {
             if (ec) {
                 throw std::runtime_error{ec.message()};
