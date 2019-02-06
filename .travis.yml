@@ -17,7 +17,7 @@ before_install:
   - cd msgpack-c-cpp-3.1.1
   - mkdir build
   - cd build
-  - cmake -DMSGPACK_CXX17=ON .
+  - cmake -DMSGPACK_CXX17=ON ..
   - make
   - sudo make install
 
