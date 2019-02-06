@@ -14,7 +14,7 @@ int main() {
         return std::tuple<int, std::string>(i + 1000, "foo");
     };
     std::function<std::tuple<double> (double)> sin_handler = [](double i) {
-        return std::sin(i);
+        return std::tuple<double>(std::sin(i));
     };
     s.add_procedure("foo", foo_handler);
     s.add_procedure("sin", sin_handler);
