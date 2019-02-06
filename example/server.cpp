@@ -9,7 +9,7 @@
 
 int main() {
     boost::asio::io_service io_service;
-    rpc_server s{io_service, "0.0.0.0", 12345};
+    remote::rpc_server s{io_service, "0.0.0.0", 12345};
     std::function<std::tuple<int, std::string> (int)> foo_handler = [](int i) {
         return std::tuple<int, std::string>(i + 1000, "foo");
     };

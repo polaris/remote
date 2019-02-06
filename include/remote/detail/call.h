@@ -13,15 +13,19 @@
 #include <tuple>
 #include <unordered_map>
 
+namespace remote {
+
 namespace detail {
 
 struct call_t {
     uint32_t call_id;
-    std::function<void (boost::system::error_code, std::size_t)> write_handler;
-    std::function<void (bool, const msgpack::object&)> response_handler;
+    std::function<void(boost::system::error_code, std::size_t)> write_handler;
+    std::function<void(bool, const msgpack::object &)> response_handler;
     msgpack::sbuffer buffer;
 };
 
-}
+}   // namespace detail
+
+}   // namespace remote
 
 #endif //REMOTE_CALL_H
