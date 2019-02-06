@@ -11,10 +11,10 @@ int main() {
     boost::asio::io_service io_service;
     remote::rpc_server s{io_service, "0.0.0.0", 12345};
     std::function<std::tuple<int, std::string> (int)> foo_handler = [](int i) {
-        return std::tuple<int, std::string>(i + 1000, "foo");
+        return std::make_tuple<int, std::string>(i + 1000, "foo");
     };
     std::function<std::tuple<double> (double)> sin_handler = [](double i) {
-        return std::tuple<double>(std::sin(i));
+        return std::make_tuple<double>(std::sin(i));
     };
     s.add_procedure("foo", foo_handler);
     s.add_procedure("sin", sin_handler);
