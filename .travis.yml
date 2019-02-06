@@ -20,7 +20,7 @@ before_install:
   - cmake -DMSGPACK_CXX11=ON ..
   - make
   - sudo make install
-  - cd ../../..
+  - cd ../..
 
 before_script:
   - mkdir build
