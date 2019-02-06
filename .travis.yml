@@ -14,7 +14,7 @@ before_install:
   - tar xf boost_1_69_0.tar.gz
   - cd boost_1_69_0
   - ./bootstrap.sh
-  - sudo ./b2 -d0 --without-math --without-thread --without-test --without-random --without-stacktrace --without-filesystem --without-regex --without-serialization --without-python --without-wave --without-graph --without-graph_parallel variant=release link=static threading=multi runtime-link=static install
+  - sudo ./b2 -d0 --without-atomic --without-chrono --without-container --without-context --without-contract --without-coroutine --without-date_time --without-exception --without-fiber --without-filesystem --without-graph --without-graph_parallel --without-iostreams --without-locale --without-log --without-math --without-mpi --without-program_options --without-python --without-random --without-regex --without-serialization --without-stacktrace --without-test --without-thread --without-timer --without-type_erasure --without-wave variant=release link=static threading=multi runtime-link=static install
   - cd ..
   - wget https://github.com/msgpack/msgpack-c/archive/cpp-3.1.1.zip
   - unzip cpp-3.1.1.zip
