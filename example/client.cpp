@@ -1,5 +1,3 @@
-#include "../include/remote/detail/then.h"
-
 #include "../include/remote/rpc_client.h"
 
 #include <boost/asio.hpp>
