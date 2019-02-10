@@ -21,7 +21,7 @@ namespace remote {
 template<typename... ReturnValueTypes>
 class rpc_future {
 public:
-    rpc_future(boost::asio::io_service &io_service, std::future<std::tuple<ReturnValueTypes...>> future);
+    explicit rpc_future(std::future<std::tuple<ReturnValueTypes...>> future);
 
     std::tuple<ReturnValueTypes...> get();
 
@@ -38,7 +38,6 @@ public:
     then(Function &&f);
 
 private:
-    boost::asio::io_service &io_service_;
     std::future<std::tuple<ReturnValueTypes...>> future_;
 };
 
@@ -48,10 +47,8 @@ std::tuple<ReturnValueTypes...> rpc_future<ReturnValueTypes...>::get() {
 }
 
 template<typename... ReturnValueTypes>
-rpc_future<ReturnValueTypes...>::rpc_future(boost::asio::io_service &io_service,
-                                            std::future<std::tuple<ReturnValueTypes...>> future)
-        : io_service_{io_service}
-        , future_{std::move(future)} {
+rpc_future<ReturnValueTypes...>::rpc_future(std::future<std::tuple<ReturnValueTypes...>> future)
+        : future_{std::move(future)} {
 }
 
 template<typename... ReturnValueTypes>
@@ -76,12 +73,7 @@ template<typename... ReturnValueTypes>
 template<typename Function>
 std::future<typename std::result_of<Function(std::future<std::tuple<ReturnValueTypes...>> &)>::type>
 rpc_future<ReturnValueTypes...>::then(Function &&f) {
-    auto g = [this, f](std::future<std::tuple<ReturnValueTypes...>> &fut) {
-        boost::asio::post(io_service_, [f, fut = std::move(fut)]() {
-            f(const_cast<std::future<std::tuple<ReturnValueTypes...>> &>(fut));
-        });
-    };
-    return detail::then(future_, std::move(g));
+    return detail::then(future_, std::forward<Function>(f));
 }
 
 class rpc_client {
@@ -155,7 +147,7 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string &proced
         }
     };
     write(call);
-    return rpc_future<ReturnValueTypes...>{io_service_, promise->get_future()};
+    return rpc_future<ReturnValueTypes...>{promise->get_future()};
 }
 
 }   // namespace remote
