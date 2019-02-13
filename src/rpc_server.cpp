@@ -42,6 +42,7 @@ void rpc_server::session::start() {
 }
 
 void rpc_server::session::read() {
+    unpacker_.reserve_buffer();
     auto self = shared_from_this();
     socket_.async_read_some(boost::asio::buffer(unpacker_.buffer(), 1024),
                             [self](boost::system::error_code ec, std::size_t bytes_received) {

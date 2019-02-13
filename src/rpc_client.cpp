@@ -19,6 +19,7 @@ void rpc_client::connect() {
 }
 
 void rpc_client::read() {
+    unpacker_.reserve_buffer();
     socket_.async_read_some(boost::asio::buffer(unpacker_.buffer(), 1024),
                             [this](boost::system::error_code ec, std::size_t bytes_received) {
                                 if (!ec) {
