@@ -21,6 +21,10 @@ add_library(remote STATIC
         include/remote/detail/then.h)
 target_compile_options(remote PRIVATE "-Wall")
 
+add_executable(async_client example/async_client.cpp)
+target_include_directories(async_client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS})
+target_link_libraries(async_client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES})
+
 add_executable(client example/client.cpp)
 target_include_directories(client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS})
 target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES})
