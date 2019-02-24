@@ -7,8 +7,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
+set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+
 find_package(Msgpack 3.1.1 REQUIRED)
-find_package(Boost 1.69.0 REQUIRED)
+find_package(Boost 1.68.0 REQUIRED COMPONENTS system)
 find_package(Threads REQUIRED)
 
 add_library(remote STATIC
@@ -19,19 +21,20 @@ add_library(remote STATIC
         include/remote/detail/apply_from_tuple.h
         include/remote/detail/call.h
         include/remote/detail/then.h)
+target_include_directories(remote SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
 target_compile_options(remote PRIVATE "-Wall")
 
 add_executable(async_client example/async_client.cpp)
-target_include_directories(async_client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS})
-target_link_libraries(async_client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES})
+target_include_directories(async_client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
+target_link_libraries(async_client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(client example/client.cpp)
-target_include_directories(client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS})
-target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES})
+target_include_directories(client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
+target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(server example/server.cpp)
-target_include_directories(server SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS})
-target_link_libraries(server PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES})
+target_include_directories(server SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
+target_link_libraries(server PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
 install(TARGETS ${CMAKE_PROJECT_NAME}
         RUNTIME DESTINATION bin
