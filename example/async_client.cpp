@@ -8,8 +8,6 @@
 #include <thread>
 #include <tuple>
 
-std::future<void> t1;
-
 class Requester {
 public:
     explicit Requester(boost::asio::io_service& io_service)
