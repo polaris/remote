@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 
 find_package(Msgpack 3.1.1 REQUIRED)
 find_package(Boost 1.68.0 REQUIRED COMPONENTS system)
