@@ -1,3 +1,4 @@
+#include "log_entries.h"
 #include "../include/remote/rpc_client.h"
 
 #include <boost/asio.hpp>
@@ -33,6 +34,38 @@ int main() {
                 std::lock_guard<std::mutex> lock{mutex};
                 const auto tuple = res.get();
                 std::cout << "Result: " << std::get<0>(tuple) << std::endl;
+            } catch (const std::exception& ex) {
+                std::cout << "Failure: " << ex.what() << std::endl;
+            }
+        });
+
+        std::vector<int> v{1, 2, 3};
+
+        remote::rpc_future<std::string> complex_result = c.async_call<std::string>("complex", v);
+        auto t3 = complex_result.then([&mutex](std::future<std::tuple<std::string>>& res) {
+            try {
+                std::lock_guard<std::mutex> lock{mutex};
+                const auto tuple = res.get();
+                std::cout << "Result: " << std::get<0>(tuple) << std::endl;
+            } catch (const std::exception& ex) {
+                std::cout << "Failure: " << ex.what() << std::endl;
+            }
+        });
+
+        uint32_t term = 123;
+        uint32_t leader_id = 321;
+        uint32_t prev_log_index = 1;
+        uint32_t prev_log_term = 2;
+        log_entry_vector entries;
+        uint32_t leader_commit = 1;
+
+        remote::rpc_future<uint32_t, bool> append_entries_result = c.async_call<uint32_t, bool>(
+            "AppendEntries", term, leader_id, prev_log_index, prev_log_term, entries, leader_commit);
+        auto t4 = append_entries_result.then([&mutex](std::future<std::tuple<uint32_t, bool>>& res) {
+            try {
+                std::lock_guard<std::mutex> lock{mutex};
+                const auto tuple = res.get();
+                std::cout << "Result: " << std::get<0>(tuple) << ", " << std::get<1>(tuple) << std::endl;
             } catch (const std::exception& ex) {
                 std::cout << "Failure: " << ex.what() << std::endl;
             }

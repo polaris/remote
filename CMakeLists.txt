@@ -28,11 +28,11 @@ add_executable(async_client example/async_client.cpp)
 target_include_directories(async_client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
 target_link_libraries(async_client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
-add_executable(client example/client.cpp)
+add_executable(client example/client.cpp example/log_entries.h)
 target_include_directories(client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
 target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
-add_executable(server example/server.cpp)
+add_executable(server example/server.cpp example/log_entries.h)
 target_include_directories(server SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
 target_link_libraries(server PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
