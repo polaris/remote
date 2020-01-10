@@ -110,7 +110,7 @@ private:
 template<typename... ReturnsValueTypes, typename... ArgumentTypes>
 std::tuple<ReturnsValueTypes...> rpc_client::call(const std::string &procedure_name, ArgumentTypes... arguments) {
     rpc_future<ReturnsValueTypes...> future =
-            async_call(procedure_name, std::forward<ArgumentTypes>(arguments)...);
+            async_call<ReturnsValueTypes...>(procedure_name, std::forward<ArgumentTypes>(arguments)...);
     future.wait();
     return future.get();
 }
