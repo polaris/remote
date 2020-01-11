@@ -98,6 +98,7 @@ private:
     uint32_t next_call_id() { return next_call_id_++; }
 
     boost::asio::io_service &io_service_;
+    boost::asio::io_service::strand strand_;
     boost::asio::ip::tcp::socket socket_;
     const std::string address_;
     const uint16_t port_;
