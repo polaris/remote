@@ -21,6 +21,7 @@ struct call_t {
     uint32_t call_id;
     std::function<void(boost::system::error_code, std::size_t)> write_handler;
     std::function<void(bool, const msgpack::object &)> response_handler;
+    std::function<void(const std::string&)> error_handler;
     msgpack::sbuffer buffer;
 };
 
