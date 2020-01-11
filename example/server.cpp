@@ -41,7 +41,7 @@ int main() {
         log_entry_vector entries,
         uint32_t leader_commit) {
 
-        return std::make_tuple<uint32_t, bool>(123, false);
+        return std::make_tuple<uint32_t, bool>(entries.size(), false);
     };
     s.add_procedure("AppendEntries", append_entries_handler);
 
