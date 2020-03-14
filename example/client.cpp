@@ -59,6 +59,12 @@ int main() {
         log_entry_vector entries;
         uint32_t leader_commit = 1;
 
+        log_entry le;
+        le.command = "command";
+        le.index = 123;
+        le.term = 321;
+        entries.push_back(le);
+
         remote::rpc_future<uint32_t, bool> append_entries_result = c.async_call<uint32_t, bool>(
             "AppendEntries", term, leader_id, prev_log_index, prev_log_term, entries, leader_commit);
         auto t4 = append_entries_result.then([&mutex](std::future<std::tuple<uint32_t, bool>>& res) {
