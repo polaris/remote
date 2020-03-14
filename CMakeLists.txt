@@ -32,6 +32,10 @@ add_executable(client example/client.cpp example/log_entries.h)
 target_include_directories(client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
 target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
 
+add_executable(simple_call example/simple_call.cpp)
+target_include_directories(simple_call SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
+target_link_libraries(simple_call PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
+
 add_executable(server example/server.cpp example/log_entries.h)
 target_include_directories(server SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
 target_link_libraries(server PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})

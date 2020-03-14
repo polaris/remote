@@ -98,6 +98,8 @@ private:
     uint32_t next_call_id() { return next_call_id_++; }
 
     boost::asio::io_service &io_service_;
+    boost::asio::io_service::strand strand_;
+    boost::asio::io_service::strand write_strand_;
     boost::asio::ip::tcp::socket socket_;
     const std::string address_;
     const uint16_t port_;
@@ -110,7 +112,7 @@ private:
 template<typename... ReturnsValueTypes, typename... ArgumentTypes>
 std::tuple<ReturnsValueTypes...> rpc_client::call(const std::string &procedure_name, ArgumentTypes... arguments) {
     rpc_future<ReturnsValueTypes...> future =
-            async_call(procedure_name, std::forward<ArgumentTypes>(arguments)...);
+            async_call<ReturnsValueTypes...>(procedure_name, std::forward<ArgumentTypes>(arguments)...);
     future.wait();
     return future.get();
 }
@@ -137,11 +139,18 @@ rpc_future<ReturnValueTypes...> rpc_client::async_call(const std::string &proced
             promise->set_exception(std::current_exception());
         }
     };
-    call->write_handler = [this, call_id, promise](boost::system::error_code ec, std::size_t bytes_sent) {
+    call->write_handler = [promise](boost::system::error_code ec, std::size_t bytes_sent) {
         try {
             if (ec) {
                 throw std::runtime_error{ec.message()};
             }
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    };
+    call->error_handler = [promise](const std::string &error_msg) {
+        try {
+            throw std::runtime_error{error_msg};
         } catch (...) {
             promise->set_exception(std::current_exception());
         }
