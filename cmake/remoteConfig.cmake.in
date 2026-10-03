@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Boost 1.84 CONFIG)
+find_dependency(msgpack-cxx CONFIG)
+find_dependency(Threads)
+
+include("${CMAKE_CURRENT_LIST_DIR}/remoteTargets.cmake")
+
+check_required_components(remote)

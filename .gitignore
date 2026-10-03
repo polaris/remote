@@ -1,3 +1,8 @@
-.idea
-cmake-build-*
-build
+.idea/
+.vscode/
+cmake-build-*/
+build/
+CMakeUserPresets.json
+compile_commands.json
+test_package/build/
+.cache/

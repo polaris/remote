@@ -1,64 +1,76 @@
-cmake_minimum_required(VERSION 3.12)
-project(remote)
+cmake_minimum_required(VERSION 3.24)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+project(remote
+        VERSION 0.2.0
+        DESCRIPTION "Typed msgpack-rpc for C++20, built on Boost.Asio coroutines"
+        HOMEPAGE_URL "https://github.com/polaris/remote"
+        LANGUAGES CXX)
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
+option(REMOTE_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
+option(REMOTE_BUILD_EXAMPLES "Build the examples" ${PROJECT_IS_TOP_LEVEL})
+set(REMOTE_SANITIZERS "" CACHE STRING "Sanitizers to build with, for example address,undefined or thread")
+option(REMOTE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Msgpack 3.1.1 REQUIRED)
-find_package(Boost 1.68.0 REQUIRED COMPONENTS system)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+find_package(Boost 1.84 REQUIRED CONFIG)
+find_package(msgpack-cxx REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 
-add_library(remote STATIC
-        src/rpc_client.cpp
-        include/remote/rpc_client.h
-        src/rpc_server.cpp
-        include/remote/rpc_server.h
-        include/remote/detail/apply_from_tuple.h
-        include/remote/detail/call.h
-        include/remote/detail/then.h)
-target_include_directories(remote SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
-target_compile_options(remote PRIVATE "-Wall")
+# Build settings for the targets of this project; not propagated to consumers.
+add_library(remote_project_options INTERFACE)
+target_compile_definitions(remote_project_options INTERFACE BOOST_ASIO_NO_DEPRECATED)
+if(MSVC)
+    target_compile_options(remote_project_options INTERFACE /W4 $<$<BOOL:${REMOTE_WARNINGS_AS_ERRORS}>:/WX>)
+else()
+    target_compile_options(remote_project_options INTERFACE
+            -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+            $<$<BOOL:${REMOTE_WARNINGS_AS_ERRORS}>:-Werror>)
+endif()
+if(REMOTE_SANITIZERS)
+    target_compile_options(remote_project_options INTERFACE -fsanitize=${REMOTE_SANITIZERS} -fno-omit-frame-pointer)
+    target_link_options(remote_project_options INTERFACE -fsanitize=${REMOTE_SANITIZERS})
+endif()
 
-add_executable(async_client example/async_client.cpp)
-target_include_directories(async_client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
-target_link_libraries(async_client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
+add_library(remote
+        src/client.cpp
+        src/connection.cpp
+        src/error.cpp
+        src/protocol.cpp
+        src/server.cpp)
+add_library(remote::remote ALIAS remote)
+target_include_directories(remote PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_compile_features(remote PUBLIC cxx_std_20)
+target_link_libraries(remote
+        PUBLIC Boost::headers msgpack-cxx Threads::Threads
+        PRIVATE $<BUILD_INTERFACE:remote_project_options>)
+set_target_properties(remote PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(client example/client.cpp example/log_entries.h)
-target_include_directories(client SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
-target_link_libraries(client PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
+if(REMOTE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
-add_executable(simple_call example/simple_call.cpp)
-target_include_directories(simple_call SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
-target_link_libraries(simple_call PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
+if(REMOTE_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
-add_executable(server example/server.cpp example/log_entries.h)
-target_include_directories(server SYSTEM PRIVATE ${MSGPACK_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})
-target_link_libraries(server PRIVATE remote Threads::Threads ${MSGPACK_LIBRARIES} ${Boost_LIBRARIES})
-
-install(TARGETS ${CMAKE_PROJECT_NAME}
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
-install(DIRECTORY include/remote DESTINATION include)
-
-if(UNIX)
-    set(CPACK_CMAKE_GENERATOR "Unix Makefiles")
-    set(CPACK_SOURCE_GENERATOR "TGZ;TBZ2")
-    set(CPACK_GENERATOR "TGZ;TBZ2")
-    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A simple RPC library for C++")
-    set(CPACK_PACKAGE_VENDOR "Jan Deinhard")
-    set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-    set(CPACK_PACKAGE_VERSION_MAJOR "0")
-    set(CPACK_PACKAGE_VERSION_MINOR "1")
-    set(CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}")
-    set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CPACK_PACKAGE_VERSION}")
-    set(CPACK_PACKAGE_CONTACT "Jan Deinhard <jan.deinhard@gmail.com>")
-    # set(CPACK_PACKAGE_SECTION "games")
-    include(CPack)
-endif(UNIX)
+install(TARGETS remote EXPORT remoteTargets)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT remoteTargets
+        NAMESPACE remote::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/remote)
+configure_package_config_file(cmake/remoteConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/remoteConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/remote)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/remoteConfigVersion.cmake
+        COMPATIBILITY SameMinorVersion)
+install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/remoteConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/remoteConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/remote)
