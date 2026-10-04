@@ -344,6 +344,25 @@ TEST_CASE("servers close connections that send oversized messages", "[server]") 
     CHECK(error_of([&] { f.run(f.client.async_call(api::echo(std::string(4096, 'x')), asio::use_awaitable)); }));
 }
 
+TEST_CASE("servers close connections that stream an oversized value", "[server]") {
+    fixture f{remote::options{.max_message_size = 1024}};
+
+    // A single string that claims 1 MiB but is never completed. The unpacker consumes only its
+    // header and buffers the payload, so the limit must also count buffered bytes.
+    std::vector<std::uint8_t> bytes{0xdb, 0x00, 0x10, 0x00, 0x00};   // str32 of 1 MiB
+    bytes.resize(bytes.size() + 8 * 1024, 'x');
+
+    const auto ec = f.run([&]() -> asio::awaitable<boost::system::error_code> {
+        asio::ip::tcp::socket socket{co_await asio::this_coro::executor};
+        co_await socket.async_connect(f.server.local_endpoint(), asio::use_awaitable);
+        co_await asio::async_write(socket, asio::buffer(bytes), asio::use_awaitable);
+        std::array<char, 16> buffer{};
+        auto [read_ec, n] = co_await socket.async_read_some(asio::buffer(buffer), asio::as_tuple(asio::use_awaitable));
+        co_return read_ec;
+    }());
+    CHECK((ec == asio::error::eof || ec == asio::error::connection_reset));
+}
+
 TEST_CASE("clients reject oversized responses", "[client]") {
     fixture f{remote::options{}, remote::options{.max_message_size = 1024}};
     f.connect();

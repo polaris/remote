@@ -52,6 +52,7 @@ target_link_libraries(remote
 set_target_properties(remote PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(REMOTE_BUILD_TESTS)
+    find_package(Catch2 3 REQUIRED CONFIG)
     enable_testing()
     add_subdirectory(tests)
 endif()

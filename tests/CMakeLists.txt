@@ -1,4 +1,3 @@
-find_package(Catch2 3 REQUIRED CONFIG)
 include(Catch)
 
 add_executable(remote_tests

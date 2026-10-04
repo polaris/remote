@@ -38,7 +38,10 @@ boost::asio::awaitable<msgpack::object_handle> connection::receive() {
             throw boost::system::system_error{error::protocol_error, ex.what()};
         }
         message_size_ += unparsed_before - unpacker_.nonparsed_size();
-        if (message_size_ > max_message_size_) {
+        // While waiting for the payload of a str, bin or ext value, the unpacker consumes only
+        // its header and leaves the payload unparsed, so count the buffered bytes as well.
+        const std::size_t pending = complete ? 0 : unpacker_.nonparsed_size();
+        if (message_size_ + pending > max_message_size_) {
             throw boost::system::system_error{error::message_too_large};
         }
         if (complete) {
