@@ -38,7 +38,7 @@ std::string parse_method(const msgpack::object &obj) {
     return obj.as<std::string>();
 }
 
-const msgpack::object &parse_params(const msgpack::object &obj) {
+msgpack::object parse_params(const msgpack::object &obj) {
     if (!is_array(obj)) {
         throw_protocol_error("params is not an array");
     }
@@ -58,17 +58,19 @@ message parse_message(const msgpack::object &obj) {
             if (size != 4) {
                 throw_protocol_error("request must have 4 elements");
             }
-            return request{parse_msgid(fields[1]), parse_method(fields[2]), parse_params(fields[3])};
+            return request{.msgid = parse_msgid(fields[1]),
+                           .method = parse_method(fields[2]),
+                           .params = parse_params(fields[3])};
         case static_cast<int>(message_type::response):
             if (size != 4) {
                 throw_protocol_error("response must have 4 elements");
             }
-            return response{parse_msgid(fields[1]), fields[2], fields[3]};
+            return response{.msgid = parse_msgid(fields[1]), .error = fields[2], .result = fields[3]};
         case static_cast<int>(message_type::notification):
             if (size != 3) {
                 throw_protocol_error("notification must have 3 elements");
             }
-            return notification{parse_method(fields[1]), parse_params(fields[2])};
+            return notification{.method = parse_method(fields[1]), .params = parse_params(fields[2])};
         default:
             throw_protocol_error("unknown message type");
     }

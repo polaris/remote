@@ -115,6 +115,8 @@ public:
 
     client(const client &) = delete;
     client &operator=(const client &) = delete;
+    client(client &&) = delete;
+    client &operator=(client &&) = delete;
 
     /// Closes the connection. Pending calls fail with boost::asio::error::operation_aborted.
     ~client();

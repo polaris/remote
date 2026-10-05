@@ -9,6 +9,7 @@
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
+#include <boost/scope/scope_exit.hpp>
 
 #include <chrono>
 #include <variant>
@@ -103,11 +104,7 @@ boost::asio::awaitable<msgpack::object_handle> client_impl::transact(std::shared
     const auto deadline = deadline_after(timeout.value_or(self->options_.call_timeout));
     pending_call call{self->strand_, self->connection_.get(), deadline};
     self->pending_calls_.emplace(msgid, &call);
-    struct unregister {
-        ~unregister() { impl.pending_calls_.erase(msgid); }
-        client_impl &impl;
-        std::uint32_t msgid;
-    } guard{*self, msgid};
+    const boost::scope::scope_exit unregister{[&] { self->pending_calls_.erase(msgid); }};
 
     self->connection_->send(std::move(request));
     if (!call.done) {
@@ -200,7 +197,12 @@ client::client(const executor_type &executor, const options &opts)
 }
 
 client::~client() {
-    impl_->close();
+    try {
+        impl_->close();
+    } catch (...) {  // NOLINT(bugprone-empty-catch): a destructor must not throw
+        // close() fails only if it cannot queue work on the strand, e.g. when out of memory.
+        // The connection is then closed when the io_context is destroyed.
+    }
 }
 
 void client::close() {

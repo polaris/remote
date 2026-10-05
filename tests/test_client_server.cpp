@@ -38,25 +38,25 @@ namespace {
 namespace api {
 
 struct log_entry {
-    std::uint64_t term;
-    std::uint64_t index;
+    std::uint64_t term = 0;
+    std::uint64_t index = 0;
     std::string command;
     MSGPACK_DEFINE(term, index, command);
 };
 
 struct append_entries_request {
-    std::uint64_t term;
-    std::uint32_t leader_id;
-    std::uint64_t prev_log_index;
-    std::uint64_t prev_log_term;
+    std::uint64_t term = 0;
+    std::uint32_t leader_id = 0;
+    std::uint64_t prev_log_index = 0;
+    std::uint64_t prev_log_term = 0;
     std::vector<log_entry> entries;
-    std::uint64_t leader_commit;
+    std::uint64_t leader_commit = 0;
     MSGPACK_DEFINE(term, leader_id, prev_log_index, prev_log_term, entries, leader_commit);
 };
 
 struct append_entries_response {
-    std::uint64_t term;
-    bool success;
+    std::uint64_t term = 0;
+    bool success = false;
     MSGPACK_DEFINE(term, success);
 };
 
@@ -99,7 +99,7 @@ struct fixture {
         });
         server.add_procedure(api::record, [this](int value) { recorded.push_back(value); });
         server.add_procedure(api::append_entries, [](const api::append_entries_request &req) {
-            return api::append_entries_response{req.term, req.entries.size() == 2};
+            return api::append_entries_response{.term = req.term, .success = req.entries.size() == 2};
         });
         server.start();
     }
@@ -107,10 +107,11 @@ struct fixture {
     /// Runs a coroutine on the io_context until it completes and returns its result.
     template<typename T>
     T run(asio::awaitable<T> task) {
-        std::optional<std::conditional_t<std::is_void_v<T>, int, T>> result;
+        // Only assigned when T is not void.
+        std::optional<std::conditional_t<std::is_void_v<T>, int, T>> result;  // NOLINT(misc-const-correctness)
         std::exception_ptr error;
         bool done = false;
-        asio::co_spawn(io, std::move(task), [&](std::exception_ptr ex, auto &&... value) {
+        asio::co_spawn(io, std::move(task), [&](const std::exception_ptr &ex, [[maybe_unused]] auto &&... value) {
             error = ex;
             if constexpr (!std::is_void_v<T>) {
                 if (!ex) {
@@ -178,7 +179,7 @@ TEST_CASE_METHOD(fixture, "calls accept completion callbacks", "[client]") {
     connect();
 
     std::optional<int> sum;
-    client.async_call(api::add(1, 2), [&](std::exception_ptr ex, int result) {
+    client.async_call(api::add(1, 2), [&](const std::exception_ptr &ex, int result) {
         CHECK(!ex);
         sum = result;
         io.stop();
@@ -196,7 +197,8 @@ TEST_CASE_METHOD(fixture, "user-defined types are serialized", "[client][server]
             .leader_id = 1,
             .prev_log_index = 10,
             .prev_log_term = 2,
-            .entries = {{3, 11, "set x 1"}, {3, 12, "set y 2"}},
+            .entries = {{.term = 3, .index = 11, .command = "set x 1"},
+                        {.term = 3, .index = 12, .command = "set y 2"}},
             .leader_commit = 10,
     };
     const auto response = run(client.async_call(api::append_entries(request), asio::use_awaitable));
@@ -278,6 +280,7 @@ TEST_CASE_METHOD(fixture, "many concurrent calls are pipelined over one connecti
     constexpr int call_count = 1000;
     using operation = decltype(client.async_call(api::add(0, 0), asio::deferred));
     std::vector<operation> operations;
+    operations.reserve(call_count);
     for (int i = 0; i < call_count; ++i) {
         operations.push_back(client.async_call(api::add(i, i), asio::deferred));
     }
@@ -298,16 +301,20 @@ TEST_CASE("blocking calls can be made from many threads", "[client][server]") {
     server.start();
     remote::client client{io.get_executor()};
 
+    constexpr int io_thread_count = 2;
     std::vector<std::thread> io_threads;
-    for (int i = 0; i < 2; ++i) {
+    io_threads.reserve(io_thread_count);
+    for (int i = 0; i < io_thread_count; ++i) {
         io_threads.emplace_back([&io] { io.run(); });
     }
 
     client.async_connect(server.local_endpoint(), asio::use_future).get();
 
     std::atomic<int> failures{0};
+    constexpr int caller_count = 8;
     std::vector<std::thread> callers;
-    for (int t = 0; t < 8; ++t) {
+    callers.reserve(caller_count);
+    for (int t = 0; t < caller_count; ++t) {
         callers.emplace_back([&client, &failures, t] {
             for (int i = 0; i < 100; ++i) {
                 if (client.call(api::add(t, i)) != t + i) {
@@ -333,7 +340,7 @@ TEST_CASE("blocking calls can be made from many threads", "[client][server]") {
 TEST_CASE_METHOD(fixture, "large messages span many reads", "[client][server]") {
     connect();
 
-    const std::string large(4 * 1024 * 1024, 'x');
+    const std::string large(std::size_t{4} * 1024 * 1024, 'x');
     CHECK(run(client.async_call(api::echo(large), asio::use_awaitable)) == large);
 }
 
@@ -351,7 +358,7 @@ TEST_CASE("servers close connections that stream an oversized value", "[server]"
     // A single string that claims 1 MiB but is never completed. The unpacker consumes only its
     // header and buffers the payload, so the limit must also count buffered bytes.
     std::vector<std::uint8_t> bytes{0xdb, 0x00, 0x10, 0x00, 0x00};   // str32 of 1 MiB
-    bytes.resize(bytes.size() + 8 * 1024, 'x');
+    bytes.resize(bytes.size() + (std::size_t{8} * 1024), 'x');
 
     const auto ec = f.run([&]() -> asio::awaitable<boost::system::error_code> {
         asio::ip::tcp::socket socket{co_await asio::this_coro::executor};
@@ -572,11 +579,13 @@ TEST_CASE("with_timeout applies to blocking calls", "[client][timeout]") {
     // call() blocks this thread until the response arrives, so another thread has to run the
     // io_context. The server's pending accept keeps run() busy until it is stopped.
     f.io.restart();
-    std::jthread io_thread{[&f] { f.io.run(); }};
+    const std::jthread io_thread{[&f] { f.io.run(); }};
+    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions): local scope guard, never copied
     struct stop_on_exit {
         ~stop_on_exit() { io.stop(); }
         asio::io_context &io;
-    } stopper{f.io};   // destroyed before io_thread, so the join below cannot hang
+    };
+    const stop_on_exit stopper{f.io};   // destroyed before io_thread, so the join below cannot hang
 
     CHECK(f.client.call(api::delay(300).with_timeout(1s)) == 300);
 }

@@ -53,7 +53,7 @@ public:
             boost::system::error_code ignored;
             self->acceptor_.close(ignored);
         });
-        std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
         stopped_ = true;
         for (const auto &[ptr, weak_conn] : connections_) {
             if (auto conn = weak_conn.lock()) {
@@ -83,7 +83,7 @@ private:
             }
             auto conn = std::make_shared<connection>(std::move(socket), self->options_.max_message_size);
             {
-                std::lock_guard lock{self->mutex_};
+                const std::scoped_lock lock{self->mutex_};
                 if (self->stopped_) {
                     conn->close();
                     break;
@@ -112,11 +112,11 @@ private:
                 }
                 // Responses are ignored: the server never sends requests.
             }
-        } catch (...) {
+        } catch (...) {  // NOLINT(bugprone-empty-catch): ending the loop is the handling
             // The peer disconnected or violated the protocol.
         }
         conn->close();
-        std::lock_guard lock{self->mutex_};
+        const std::scoped_lock lock{self->mutex_};
         self->connections_.erase(conn.get());
     }
 
@@ -150,7 +150,7 @@ private:
             if (it != self->handlers_.end()) {
                 co_await it->second(notif.params);
             }
-        } catch (...) {
+        } catch (...) {  // NOLINT(bugprone-empty-catch): see below
             // Notifications have no response, so there is nobody to report the error to.
         }
     }
@@ -176,7 +176,12 @@ server::server(const executor_type &executor, const boost::asio::ip::tcp::endpoi
 }
 
 server::~server() {
-    stop();
+    try {
+        stop();
+    } catch (...) {  // NOLINT(bugprone-empty-catch): a destructor must not throw
+        // stop() fails only if it cannot queue work, e.g. when out of memory. The connections
+        // are then closed when the io_context is destroyed.
+    }
 }
 
 void server::start() {

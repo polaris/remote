@@ -10,13 +10,14 @@ option(REMOTE_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 option(REMOTE_BUILD_EXAMPLES "Build the examples" ${PROJECT_IS_TOP_LEVEL})
 set(REMOTE_SANITIZERS "" CACHE STRING "Sanitizers to build with, for example address,undefined or thread")
 option(REMOTE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(REMOTE_CLANG_TIDY "Run clang-tidy on this project's sources while building" OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-find_package(Boost 1.84 REQUIRED CONFIG)
+find_package(Boost 1.85 REQUIRED CONFIG)
 find_package(msgpack-cxx REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 
@@ -33,6 +34,16 @@ endif()
 if(REMOTE_SANITIZERS)
     target_compile_options(remote_project_options INTERFACE -fsanitize=${REMOTE_SANITIZERS} -fno-omit-frame-pointer)
     target_link_options(remote_project_options INTERFACE -fsanitize=${REMOTE_SANITIZERS})
+endif()
+
+# Set before any target is created, so that it applies to the library, tests and examples.
+if(REMOTE_CLANG_TIDY)
+    # Prefer the version pinned in requirements.txt, installed into .venv.
+    find_program(REMOTE_CLANG_TIDY_EXE NAMES clang-tidy HINTS ${PROJECT_SOURCE_DIR}/.venv/bin REQUIRED)
+    set(CMAKE_CXX_CLANG_TIDY ${REMOTE_CLANG_TIDY_EXE})
+    if(REMOTE_WARNINGS_AS_ERRORS)
+        list(APPEND CMAKE_CXX_CLANG_TIDY --warnings-as-errors=*)
+    endif()
 endif()
 
 add_library(remote

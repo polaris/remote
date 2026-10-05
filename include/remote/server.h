@@ -102,6 +102,8 @@ public:
 
     server(const server &) = delete;
     server &operator=(const server &) = delete;
+    server(server &&) = delete;
+    server &operator=(server &&) = delete;
 
     /// Calls stop().
     ~server();
@@ -138,7 +140,7 @@ void server::add_procedure(const procedure<Result(Args...)> &proc, Handler handl
     static_assert(std::is_invocable_v<Handler &, std::decay_t<Args>...>,
                   "handler cannot be called with the procedure's arguments");
     using handler_result = std::invoke_result_t<Handler &, std::decay_t<Args>...>;
-    using value = typename detail::awaitable_value<handler_result>::type;
+    using value = detail::awaitable_value<handler_result>::type;
     static_assert(std::is_void_v<Result> || std::is_convertible_v<value, Result>,
                   "handler result is not convertible to the procedure's result type");
 

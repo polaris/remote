@@ -11,7 +11,7 @@ namespace remote::detail {
 
 namespace {
 
-constexpr std::size_t read_size = 64 * 1024;
+constexpr std::size_t read_size = std::size_t{64} * 1024;
 
 }   // namespace
 

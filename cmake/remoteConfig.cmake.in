@@ -1,7 +1,7 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(Boost 1.84 CONFIG)
+find_dependency(Boost 1.85 CONFIG)
 find_dependency(msgpack-cxx CONFIG)
 find_dependency(Threads)
 
