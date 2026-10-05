@@ -67,7 +67,7 @@ public:
 
     /// Binds arguments to the procedure. The arguments are serialized right away, so they do
     /// not need to outlive the returned invocation.
-    invocation<Result> operator()(Args... args) const {
+    invocation<Result> operator()(const Args &... args) const {
         msgpack::sbuffer params;
         msgpack::packer<msgpack::sbuffer> packer{params};
         packer.pack_array(sizeof...(Args));

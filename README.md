@@ -146,7 +146,17 @@ On failure, the server sends `[code, message]` as the error object, where `code`
 
 ## Building
 
-Requirements: a C++20 compiler with coroutine support, CMake 3.24+ and Conan 2. The dependencies are Boost (header-only parts), msgpack-cxx, and Catch2 for the tests.
+Requirements: a C++20 compiler with coroutine support, CMake 3.24+ and Python 3. The dependencies are Boost (header-only parts), msgpack-cxx, and Catch2 for the tests.
+
+The build tools, Conan and clang-tidy, are pinned in `requirements.txt`. Install them into a virtual environment:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Then build and test:
 
 ```sh
 conan install . --build=missing -s build_type=Debug -s compiler.cppstd=20
@@ -162,7 +172,24 @@ CMake options:
 | `REMOTE_BUILD_TESTS` | on if top-level | Build the Catch2 test suite |
 | `REMOTE_BUILD_EXAMPLES` | on if top-level | Build the examples |
 | `REMOTE_SANITIZERS` | empty | For example `address,undefined` or `thread` |
-| `REMOTE_WARNINGS_AS_ERRORS` | off | Used by CI |
+| `REMOTE_WARNINGS_AS_ERRORS` | off | Treat compiler warnings, and clang-tidy findings, as errors. Used by CI |
+| `REMOTE_CLANG_TIDY` | off | Run clang-tidy on every source file while building |
+
+### clang-tidy
+
+The checks are configured in [`.clang-tidy`](.clang-tidy). To run them as part of a build, enable `REMOTE_CLANG_TIDY`. CMake uses the clang-tidy from `.venv` if it exists:
+
+```sh
+cmake -S . -B build/tidy -DCMAKE_TOOLCHAIN_FILE=build/Debug/generators/conan_toolchain.cmake \
+      -DCMAKE_BUILD_TYPE=Debug -DREMOTE_CLANG_TIDY=ON
+cmake --build build/tidy
+```
+
+To check without rebuilding, run it over the compilation database of an existing build:
+
+```sh
+run-clang-tidy.py -p build/Debug -quiet "$PWD/(src|tests|examples)/.*"
+```
 
 ### Sanitizer builds
 
@@ -177,7 +204,7 @@ cd build/tsan && TSAN_OPTIONS=halt_on_error=1 ctest --output-on-failure
 
 `halt_on_error=1` stops at the first data race. Without it, ThreadSanitizer reports the race and continues, and the corrupted state can hang the test instead of failing it. For `address,undefined`, use a second build directory.
 
-CI builds and tests with GCC and Clang on Linux and with Apple Clang on macOS. It also runs the tests under AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer.
+CI builds and tests with GCC and Clang on Linux and with Apple Clang on macOS. It also runs the tests under AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer, and runs clang-tidy with findings treated as errors.
 
 ### Using remote in your project
 

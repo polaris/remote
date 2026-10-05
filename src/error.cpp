@@ -6,7 +6,7 @@ namespace remote {
 
 namespace {
 
-class remote_error_category : public boost::system::error_category {
+class remote_error_category final : public boost::system::error_category {
 public:
     const char *name() const noexcept override {
         return "remote";

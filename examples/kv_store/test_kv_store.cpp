@@ -8,11 +8,17 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <format>
 #include <future>
 #include <stdexcept>
 
 #include "kv_store.h"
 
+namespace {
+
+// The store outlives the coroutine: the test runs the io_context to completion before the
+// store goes out of scope.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters)
 boost::asio::awaitable<void> worker(kv_store &store, int id, int iterations) {
     const std::string own_key = std::to_string(id);
 
@@ -21,8 +27,8 @@ boost::asio::awaitable<void> worker(kv_store &store, int id, int iterations) {
         co_await store.put(own_key, expected);
         const auto value = co_await store.get(own_key);
         if (value != expected) {
-            throw std::runtime_error("worker " + own_key + ": expected " + expected +
-                                     ", got " + value.value_or("<missing>"));
+            throw std::runtime_error{std::format("worker {}: expected {}, got {}", own_key, expected,
+                                                 value.value_or("<missing>"))};
         }
 
         if (i % 20 == 0) {
@@ -43,6 +49,8 @@ boost::asio::awaitable<void> worker(kv_store &store, int id, int iterations) {
     }
 }
 
+}   // namespace
+
 TEST_CASE("kv_store is safe under concurrent access", "[kv_store][stress]") {
     boost::asio::io_context io;
 
@@ -52,12 +60,15 @@ TEST_CASE("kv_store is safe under concurrent access", "[kv_store][stress]") {
     constexpr int iterations = 1000;
 
     std::vector<std::future<void>> results;
+    results.reserve(worker_count);
     for (int w = 0; w < worker_count; ++w) {      // spawn work first...
         results.push_back(boost::asio::co_spawn(io, worker(store, w, iterations), boost::asio::use_future));
     }
     {
+        constexpr int thread_count = 4;
         std::vector<std::jthread> threads;        // ...then start the threads
-        for (int t = 0; t < 4; ++t) {
+        threads.reserve(thread_count);
+        for (int t = 0; t < thread_count; ++t) {
             threads.emplace_back([&io] { io.run(); });
         }
     }                                             // joins: all work done
@@ -72,6 +83,7 @@ TEST_CASE("kv_store is safe under concurrent access", "[kv_store][stress]") {
     }, boost::asio::use_future);
     auto final_values = boost::asio::co_spawn(io, [&store]() -> boost::asio::awaitable<std::vector<std::optional<std::string>>> {
         std::vector<std::optional<std::string>> values;
+        values.reserve(worker_count);
         for (int w = 0; w < worker_count; ++w) {
             values.push_back(co_await store.get(std::to_string(w)));
         }
@@ -84,7 +96,7 @@ TEST_CASE("kv_store is safe under concurrent access", "[kv_store][stress]") {
     const auto keys = keys_future.get();
     REQUIRE(keys.size() == worker_count);
     for (int w = 0; w < worker_count; ++w) {
-        REQUIRE(std::find(keys.begin(), keys.end(), std::to_string(w)) != keys.end());
+        REQUIRE(std::ranges::find(keys, std::to_string(w)) != keys.end());
     }
 
     for (const auto &value : final_values.get()) {

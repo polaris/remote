@@ -33,13 +33,13 @@ enum class message_type : int {
 // from. They are valid only as long as that handle is alive.
 
 struct request {
-    std::uint32_t msgid;
+    std::uint32_t msgid = 0;
     std::string method;
     msgpack::object params;
 };
 
 struct response {
-    std::uint32_t msgid;
+    std::uint32_t msgid = 0;
     msgpack::object error;
     msgpack::object result;
 };

@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
             server.stop();
         });
 
-        std::cout << "listening on " << server.local_endpoint() << std::endl;
+        std::cout << "listening on " << server.local_endpoint() << '\n' << std::flush;
 
         std::vector<std::jthread> pool;
         try {
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
                         io.run();
                     } catch (const std::exception &ex) {
                         failed.store(true);
-                        std::cerr << "error: " << ex.what() << std::endl;
+                        std::cerr << "error: " << ex.what() << '\n';
                         io.stop();
                     }
                 });
@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
             throw;
         }
     } catch (const std::exception &ex) {
-        std::cerr << "error: " << ex.what() << std::endl;
+        std::cerr << "error: " << ex.what() << '\n';
         return 1;
     }
 

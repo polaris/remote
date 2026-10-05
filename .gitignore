@@ -7,3 +7,4 @@ compile_commands.json
 test_package/build/
 .cache/
 Testing/
+.venv/

@@ -13,7 +13,7 @@
 
 class kv_store {
 public:
-    explicit kv_store(boost::asio::any_io_executor executor)
+    explicit kv_store(const boost::asio::any_io_executor &executor)
         : strand_{boost::asio::make_strand(executor)} {}
 
     boost::asio::awaitable<void> put(std::string key, std::string value) {
@@ -24,8 +24,8 @@ public:
         }, boost::asio::use_awaitable);
     }
 
-    boost::asio::awaitable<std::optional<std::string>> get(const std::string &key) const {
-        return boost::asio::co_spawn(strand_, [this, key]() -> boost::asio::awaitable<std::optional<std::string>> {
+    boost::asio::awaitable<std::optional<std::string>> get(std::string key) const {
+        return boost::asio::co_spawn(strand_, [this, key = std::move(key)]() -> boost::asio::awaitable<std::optional<std::string>> {
             assert(strand_.running_in_this_thread());
             const auto it = store_.find(key);
             if (it == store_.end()) {
@@ -35,8 +35,8 @@ public:
         }, boost::asio::use_awaitable);
     }
 
-    boost::asio::awaitable<bool> erase(const std::string &key) {
-        return boost::asio::co_spawn(strand_, [this, key]() -> boost::asio::awaitable<bool> {
+    boost::asio::awaitable<bool> erase(std::string key) {
+        return boost::asio::co_spawn(strand_, [this, key = std::move(key)]() -> boost::asio::awaitable<bool> {
             assert(strand_.running_in_this_thread());
             co_return store_.erase(key) > 0;
         }, boost::asio::use_awaitable);

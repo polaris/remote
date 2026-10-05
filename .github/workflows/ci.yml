@@ -37,6 +37,11 @@ jobs:
             cxx: clang++
             cmake_options: -DREMOTE_SANITIZERS=thread
             tsan_options: halt_on_error=1
+          - name: clang-tidy
+            os: ubuntu-24.04
+            cc: clang
+            cxx: clang++
+            cmake_options: -DREMOTE_CLANG_TIDY=ON
     env:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
@@ -48,10 +53,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install Conan
+      - name: Install tools
         run: |
-          pip install conan
+          pip install -r requirements.txt
           conan profile detect
 
       - uses: actions/cache@v4
@@ -81,10 +88,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install Conan
+      - name: Install tools
         run: |
-          pip install conan
+          pip install -r requirements.txt
           conan profile detect
 
       - uses: actions/cache@v4

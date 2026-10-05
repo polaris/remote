@@ -27,7 +27,9 @@ int usage() {
     return 2;
 }
 
-// Returns the process exit code.
+// Returns the process exit code. The references are safe: client and args live in main(),
+// which outlives io.run() and therefore this coroutine.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters)
 boost::asio::awaitable<int> run(remote::client &client, std::span<const std::string> args) {
     co_await client.async_connect(args[0], args[1]);
 
@@ -37,13 +39,13 @@ boost::asio::awaitable<int> run(remote::client &client, std::span<const std::str
     } else if (command == "get" && args.size() == 4) {
         const auto value = co_await client.async_call(kv::get(args[3]));
         if (!value) {
-            std::cerr << "not found" << std::endl;
+            std::cerr << "not found\n";
             co_return 1;
         }
-        std::cout << *value << std::endl;
+        std::cout << *value << '\n';
     } else if (command == "erase" && args.size() == 4) {
         if (!co_await client.async_call(kv::erase(args[3]))) {
-            std::cerr << "not found" << std::endl;
+            std::cerr << "not found\n";
             co_return 1;
         }
     } else if (command == "keys" && args.size() == 3) {
@@ -59,29 +61,34 @@ boost::asio::awaitable<int> run(remote::client &client, std::span<const std::str
 }   // namespace
 
 int main(int argc, char *argv[]) {
-    const std::vector<std::string> args(argv + 1, argv + argc);
-    if (args.size() < 3) {
-        return usage();
-    }
-
-    boost::asio::io_context io;
-    remote::client client{io.get_executor()};
-    int exit_code = 1;
-    boost::asio::co_spawn(io, run(client, args), [&](std::exception_ptr ex, int result) {
-        exit_code = result;
-        if (ex) {
-            try {
-                std::rethrow_exception(ex);
-            } catch (const boost::system::system_error &error) {
-                std::cerr << "error: " << error.code().message() << std::endl;
-                exit_code = 1;
-            } catch (const std::exception &error) {
-                std::cerr << "error: " << error.what() << std::endl;
-                exit_code = 1;
-            }
+    try {
+        const std::vector<std::string> args(argv + 1, argv + argc);
+        if (args.size() < 3) {
+            return usage();
         }
-        client.close();
-    });
-    io.run();
-    return exit_code;
+
+        boost::asio::io_context io;
+        remote::client client{io.get_executor()};
+        int exit_code = 1;
+        boost::asio::co_spawn(io, run(client, args), [&](const std::exception_ptr &ex, int result) {
+            exit_code = result;
+            if (ex) {
+                try {
+                    std::rethrow_exception(ex);
+                } catch (const boost::system::system_error &error) {
+                    std::cerr << "error: " << error.code().message() << '\n';
+                    exit_code = 1;
+                } catch (const std::exception &error) {
+                    std::cerr << "error: " << error.what() << '\n';
+                    exit_code = 1;
+                }
+            }
+            client.close();
+        });
+        io.run();
+        return exit_code;
+    } catch (const std::exception &ex) {
+        std::cerr << "error: " << ex.what() << '\n';
+        return 1;
+    }
 }
