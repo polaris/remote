@@ -93,12 +93,15 @@ void client_impl::attach(const std::shared_ptr<client_impl> &self, boost::asio::
 
 boost::asio::awaitable<msgpack::object_handle> client_impl::transact(std::shared_ptr<client_impl> self,
                                                                      std::uint32_t msgid,
-                                                                     msgpack::sbuffer request) {
+                                                                     msgpack::sbuffer request,
+                                                                     std::optional<std::chrono::milliseconds> timeout) {
     if (!self->connection_ || !self->connection_->is_open()) {
         throw boost::system::system_error{error::not_connected};
     }
 
-    pending_call call{self->strand_, self->connection_.get(), deadline_after(self->options_.call_timeout)};
+    // A timeout set on the invocation overrides the client's default.
+    const auto deadline = deadline_after(timeout.value_or(self->options_.call_timeout));
+    pending_call call{self->strand_, self->connection_.get(), deadline};
     self->pending_calls_.emplace(msgid, &call);
     struct unregister {
         ~unregister() { impl.pending_calls_.erase(msgid); }
@@ -169,7 +172,8 @@ void client_impl::fail_pending_calls(const connection *conn, const boost::system
 }
 
 void client_impl::notify(msgpack::sbuffer notification) {
-    boost::asio::dispatch(strand_, [self = shared_from_this(), notification = std::move(notification)]() mutable {
+    boost::asio::dispatch(strand_, [self = shared_from_this(),
+                                    notification = std::move(notification)]() mutable {
         if (self->connection_) {
             self->connection_->send(std::move(notification));
         }

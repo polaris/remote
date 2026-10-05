@@ -372,7 +372,7 @@ TEST_CASE("clients reject oversized responses", "[client]") {
           == remote::error::message_too_large);
 }
 
-TEST_CASE_METHOD(fixture, "cancelled calls complete with operation_aborted", "[client]") {
+TEST_CASE_METHOD(fixture, "late responses to cancelled calls are discarded", "[client]") {
     connect();
 
     const auto outcome = run([&]() -> asio::awaitable<std::variant<int, std::monostate>> {
@@ -469,14 +469,14 @@ TEST_CASE_METHOD(fixture, "malformed input closes only the offending connection"
     CHECK(run(client.async_call(api::add(1, 2), asio::use_awaitable)) == 3);
 }
 
-TEST_CASE("calls that respond within the call timeout succeed", "[client]") {
+TEST_CASE("calls that respond within the call timeout succeed", "[client][timeout]") {
     fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
     f.connect();
 
     CHECK(f.run(f.client.async_call(api::delay(1), asio::use_awaitable)) == 1);
 }
 
-TEST_CASE("calls that exceed the call timeout fail with timed_out", "[client]") {
+TEST_CASE("calls that exceed the call timeout fail with timed_out", "[client][timeout]") {
     fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
     f.connect();
 
@@ -484,7 +484,7 @@ TEST_CASE("calls that exceed the call timeout fail with timed_out", "[client]") 
           == remote::error::timed_out);
 }
 
-TEST_CASE("late responses to timed-out calls are discarded", "[client]") {
+TEST_CASE("late responses to timed-out calls are discarded", "[client][timeout]") {
     fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
     f.connect();
 
@@ -507,7 +507,7 @@ TEST_CASE("late responses to timed-out calls are discarded", "[client]") {
     CHECK(mismatches == 0);
 }
 
-TEST_CASE("a zero, negative or huge call timeout means no timeout", "[client]") {
+TEST_CASE("non-positive and huge call timeouts disable the timeout", "[client][timeout]") {
     const auto timeout = GENERATE(0ms, -1ms, std::chrono::milliseconds::max());
     CAPTURE(timeout.count());
     fixture f{remote::options{}, remote::options{.call_timeout = timeout}};
@@ -516,7 +516,7 @@ TEST_CASE("a zero, negative or huge call timeout means no timeout", "[client]") 
     CHECK(f.run(f.client.async_call(api::delay(300), asio::use_awaitable)) == 300);
 }
 
-TEST_CASE("calls cancelled by the caller report operation_aborted rather than timed_out", "[client]") {
+TEST_CASE("calls cancelled by the caller report operation_aborted rather than timed_out", "[client][timeout]") {
     // The call timeout is longer than the caller's own deadline, so the call can only fail
     // because the caller cancelled it.
     fixture f{remote::options{}, remote::options{.call_timeout = 500ms}};
@@ -542,3 +542,41 @@ TEST_CASE("calls cancelled by the caller report operation_aborted rather than ti
     CHECK(error_of([&] { std::rethrow_exception(error); }) == asio::error::operation_aborted);
 }
 
+TEST_CASE("with_timeout adds a timeout when none is configured", "[client][timeout]") {
+    fixture f;
+    f.connect();
+
+    CHECK(error_of([&] {
+              f.run(f.client.async_call(api::delay(300).with_timeout(100ms), asio::use_awaitable));
+          }) == remote::error::timed_out);
+}
+
+TEST_CASE("with_timeout extends the configured timeout", "[client][timeout]") {
+    fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
+    f.connect();
+
+    CHECK(f.run(f.client.async_call(api::delay(300).with_timeout(1s), asio::use_awaitable)) == 300);
+}
+
+TEST_CASE("with_timeout of zero disables the configured timeout", "[client][timeout]") {
+    fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
+    f.connect();
+
+    CHECK(f.run(f.client.async_call(api::delay(300).with_timeout(0ms), asio::use_awaitable)) == 300);
+}
+
+TEST_CASE("with_timeout applies to blocking calls", "[client][timeout]") {
+    fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
+    f.connect();
+
+    // call() blocks this thread until the response arrives, so another thread has to run the
+    // io_context. The server's pending accept keeps run() busy until it is stopped.
+    f.io.restart();
+    std::jthread io_thread{[&f] { f.io.run(); }};
+    struct stop_on_exit {
+        ~stop_on_exit() { io.stop(); }
+        asio::io_context &io;
+    } stopper{f.io};   // destroyed before io_thread, so the join below cannot hang
+
+    CHECK(f.client.call(api::delay(300).with_timeout(1s)) == 300);
+}

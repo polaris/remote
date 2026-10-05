@@ -42,7 +42,8 @@ public:
 
     template<typename Result>
     static boost::asio::awaitable<Result> call(std::shared_ptr<client_impl> self, std::uint32_t msgid,
-                                               msgpack::sbuffer request);
+                                               msgpack::sbuffer request,
+                                               std::optional<std::chrono::milliseconds> timeout);
 
     void notify(msgpack::sbuffer notification);
 
@@ -65,7 +66,8 @@ private:
     /// Sends a request and waits for the response. Returns the handle that owns the result.
     static boost::asio::awaitable<msgpack::object_handle> transact(std::shared_ptr<client_impl> self,
                                                                    std::uint32_t msgid,
-                                                                   msgpack::sbuffer request);
+                                                                   msgpack::sbuffer request,
+                                                                   std::optional<std::chrono::milliseconds> timeout);
 
     void fail_pending_calls(const connection *conn, const boost::system::error_code &ec);
 
@@ -81,8 +83,10 @@ private:
 
 template<typename Result>
 boost::asio::awaitable<Result> client_impl::call(std::shared_ptr<client_impl> self, std::uint32_t msgid,
-                                                 msgpack::sbuffer request) {
-    const msgpack::object_handle result = co_await transact(std::move(self), msgid, std::move(request));
+                                                 msgpack::sbuffer request,
+                                                 std::optional<std::chrono::milliseconds> timeout) {
+    const msgpack::object_handle result =
+            co_await transact(std::move(self), msgid, std::move(request), timeout);
     if constexpr (!std::is_void_v<Result>) {
         try {
             co_return result.get().as<Result>();
@@ -176,7 +180,9 @@ auto client::async_call(const invocation<Result> &call, Token &&token) {
     const std::uint32_t msgid = impl_->next_msgid();
     return boost::asio::co_spawn(
             impl_->strand(),
-            detail::client_impl::call<Result>(impl_, msgid, detail::pack_request(msgid, call.method(), call.params())),
+            detail::client_impl::call<Result>(impl_, msgid,
+                                              detail::pack_request(msgid, call.method(), call.params()),
+                                              call.timeout()),
             std::forward<Token>(token));
 }
 
