@@ -96,6 +96,12 @@ std::variant<int, std::monostate> result = co_await (client.async_call(add(1, 2)
 client.notify(log_event("started"));
 ```
 
+Use `call_timeout` when creating the client to give every call a deadline without wrapping each one. Calls that exceed it fail with `remote::error::timed_out`:
+
+```cpp
+remote::client client{executor, {.call_timeout = std::chrono::seconds{5}}};
+```
+
 ### Asynchronous handlers
 
 A handler that returns `boost::asio::awaitable<T>` can wait without blocking the connection:
@@ -123,6 +129,7 @@ Failures are thrown as `boost::system::system_error`. The error code tells you w
 | `remote::error::invalid_result` | The result doesn't convert to the declared result type. |
 | `remote::error::protocol_error` | The peer sent something that isn't msgpack-rpc. |
 | `remote::error::message_too_large` | A message exceeded `remote::options::max_message_size`. |
+| `remote::error::timed_out` | No response within `remote::options::call_timeout`. The server may still have run the call. |
 | `boost::asio::error::*` | Transport errors, and `operation_aborted` for cancelled calls. |
 
 ## Wire protocol

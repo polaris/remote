@@ -28,6 +28,8 @@ public:
                 return "procedure failed";
             case error::invalid_result:
                 return "invalid result";
+            case error::timed_out:
+                return "timed out";
         }
         return "unknown error";
     }
