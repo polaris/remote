@@ -4,6 +4,8 @@
 #include <msgpack.hpp>
 
 #include <string_view>
+#include <optional>
+#include <chrono>
 
 namespace remote {
 
@@ -23,9 +25,17 @@ public:
     /// The arguments as a serialized msgpack array.
     const msgpack::sbuffer &params() const noexcept { return params_; }
 
+    std::optional<std::chrono::milliseconds> timeout() const noexcept { return timeout_; }
+
+    invocation with_timeout(std::chrono::milliseconds timeout) && {
+        timeout_ = timeout;
+        return std::move(*this);
+    }
+
 private:
     std::string_view method_;
     msgpack::sbuffer params_;
+    std::optional<std::chrono::milliseconds> timeout_;
 };
 
 template<typename Signature>
