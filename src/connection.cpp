@@ -7,17 +7,52 @@
 #include <boost/asio/write.hpp>
 #include <boost/system/system_error.hpp>
 
+#include <algorithm>
+
 namespace remote::detail {
 
 namespace {
 
 constexpr std::size_t read_size = std::size_t{64} * 1024;
 
+// The levels of nested arrays and maps in a message. The message array and a request's params
+// array take two of them; the rest is for the arguments and results themselves.
+constexpr std::size_t max_depth = 32;
+
+// [type, msgid, method, params] is the largest array that msgpack-rpc itself needs. A smaller
+// limit would reject every request and response.
+constexpr std::size_t min_elements = 4;
+
+// Lets strings, bins and exts refer to the read buffer instead of copying them into the zone,
+// as msgpack's default reference function does; that function is private, so it cannot be
+// passed explicitly. The zone keeps the buffer alive for as long as the message is.
+bool reference_payloads(msgpack::type::object_type /*type*/, std::size_t /*size*/, void * /*user_data*/) {
+    return true;
+}
+
+// msgpack allocates storage for the elements of an array or map when it reads the header,
+// before the elements arrive, so a header of a few bytes could otherwise request gigabytes.
+// Each nesting level can do so again: one message can reserve up to about
+// max_depth * max_elements * sizeof(msgpack::object_kv).
+//
+// Every element takes at least one byte and every map entry at least two, so the bounds based
+// on max_message_size never reject a message that fits; max_elements tightens them.
+msgpack::unpack_limit limits_for(const options &opts) {
+    const std::size_t elements = std::max(opts.max_elements, min_elements);
+    return {/*array=*/std::min(elements, opts.max_message_size),
+            /*map=*/std::min(elements, opts.max_message_size / 2),
+            /*str=*/opts.max_message_size,
+            /*bin=*/opts.max_message_size,
+            /*ext=*/opts.max_message_size,
+            /*depth=*/max_depth};
+}
+
 }   // namespace
 
-connection::connection(boost::asio::ip::tcp::socket socket, std::size_t max_message_size)
+connection::connection(boost::asio::ip::tcp::socket socket, const options &opts)
         : socket_{std::move(socket)}
-        , max_message_size_{max_message_size} {
+        , max_message_size_{opts.max_message_size}
+        , unpacker_{&reference_payloads, nullptr, MSGPACK_UNPACKER_INIT_BUFFER_SIZE, limits_for(opts)} {
     // Requests and responses are small and latency-bound; do not let Nagle's algorithm hold
     // them back. Failure is not fatal: it happens when the peer has already disconnected,
     // which the first read reports.
@@ -34,6 +69,8 @@ boost::asio::awaitable<msgpack::object_handle> connection::receive() {
         bool complete = false;
         try {
             complete = unpacker_.next(message);
+        } catch (const msgpack::size_overflow &) {
+            throw boost::system::system_error{error::message_too_large};
         } catch (const msgpack::unpack_error &ex) {
             throw boost::system::system_error{error::protocol_error, ex.what()};
         }

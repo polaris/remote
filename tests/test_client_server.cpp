@@ -153,6 +153,17 @@ boost::system::error_code error_of(const std::function<void()> &f) {
     return {};
 }
 
+boost::system::error_code send_raw(fixture &f, const std::vector<std::uint8_t> &bytes) {
+    return f.run([&]() -> asio::awaitable<boost::system::error_code> {
+        asio::ip::tcp::socket socket{co_await asio::this_coro::executor};
+        co_await socket.async_connect(f.server.local_endpoint(), asio::use_awaitable);
+        co_await asio::async_write(socket, asio::buffer(bytes), asio::use_awaitable);
+        std::array<char, 16> buffer{};
+        auto [ec, n] = co_await socket.async_read_some(asio::buffer(buffer), asio::as_tuple(asio::use_awaitable));
+        co_return ec;
+    }());
+}
+
 }   // namespace
 
 TEST_CASE_METHOD(fixture, "calls return the result of the handler", "[client][server]") {
@@ -360,15 +371,43 @@ TEST_CASE("servers close connections that stream an oversized value", "[server]"
     std::vector<std::uint8_t> bytes{0xdb, 0x00, 0x10, 0x00, 0x00};   // str32 of 1 MiB
     bytes.resize(bytes.size() + (std::size_t{8} * 1024), 'x');
 
-    const auto ec = f.run([&]() -> asio::awaitable<boost::system::error_code> {
-        asio::ip::tcp::socket socket{co_await asio::this_coro::executor};
-        co_await socket.async_connect(f.server.local_endpoint(), asio::use_awaitable);
-        co_await asio::async_write(socket, asio::buffer(bytes), asio::use_awaitable);
-        std::array<char, 16> buffer{};
-        auto [read_ec, n] = co_await socket.async_read_some(asio::buffer(buffer), asio::as_tuple(asio::use_awaitable));
-        co_return read_ec;
-    }());
+    const auto ec = send_raw(f, bytes);
     CHECK((ec == asio::error::eof || ec == asio::error::connection_reset));
+}
+
+TEST_CASE("servers close connections that announce more elements than max_elements", "[server]") {
+    // Headers for 17 elements that never follow. Without the limit, the server would allocate
+    // storage for them and wait for the elements instead of closing the connection. The count
+    // is kept small so that the allocation succeeds on every platform: a huge one could fail
+    // with bad_alloc, which also closes the connection and would hide a missing limit.
+    const auto bytes = GENERATE(std::vector<std::uint8_t>{0xdc, 0x00, 0x11},   // array16 of 17
+                                std::vector<std::uint8_t>{0xde, 0x00, 0x11});  // map16 of 17
+    fixture f{remote::options{.max_elements = 16}};
+    const auto ec = send_raw(f, bytes);
+    CHECK((ec == asio::error::eof || ec == asio::error::connection_reset));
+}
+
+TEST_CASE("servers close connections that send values nested deeper than the depth limit", "[server]") {
+    std::vector<std::uint8_t> bytes{0x94, 0x00, 0x01, 0xa1, 'x'};   // [0, 1, "x",
+    bytes.insert(bytes.end(), 100, 0x91);                            //   [[[[...
+    bytes.push_back(0xc0);                                           //   nil ]]]]
+    fixture f;
+    const auto ec = send_raw(f, bytes);
+    CHECK((ec == asio::error::eof || ec == asio::error::connection_reset));
+}
+
+TEST_CASE("servers close connections that send arrays with more than max_elements", "[server]") {
+    fixture f{remote::options{.max_elements = 4}};
+    f.connect();
+    constexpr remote::procedure<void(std::vector<int>)> sum{"sum"};
+
+    // Four elements are allowed: the request parses and reaches the method lookup.
+    CHECK(error_of([&] { f.run(f.client.async_call(sum({1, 2, 3, 4}), asio::use_awaitable)); })
+          == remote::error::unknown_procedure);
+    // Five are not: the server closes the connection without a response.
+    const auto ec = error_of([&] { f.run(f.client.async_call(sum({1, 2, 3, 4, 5}), asio::use_awaitable)); });
+    CHECK(ec);
+    CHECK(ec != remote::error::unknown_procedure);
 }
 
 TEST_CASE("clients reject oversized responses", "[client]") {
@@ -448,29 +487,18 @@ TEST_CASE_METHOD(fixture, "notifications invoke the handler without a response",
 TEST_CASE_METHOD(fixture, "malformed input closes only the offending connection", "[server]") {
     connect();
 
-    const auto send_raw = [&](std::vector<std::uint8_t> bytes) {
-        return run([&]() -> asio::awaitable<boost::system::error_code> {
-            asio::ip::tcp::socket socket{co_await asio::this_coro::executor};
-            co_await socket.async_connect(server.local_endpoint(), asio::use_awaitable);
-            co_await asio::async_write(socket, asio::buffer(bytes), asio::use_awaitable);
-            std::array<char, 16> buffer{};
-            auto [ec, n] = co_await socket.async_read_some(asio::buffer(buffer), asio::as_tuple(asio::use_awaitable));
-            co_return ec;
-        }());
-    };
-
     const auto is_closed = [](const boost::system::error_code &ec) {
         return ec == asio::error::eof || ec == asio::error::connection_reset;
     };
 
     SECTION("bytes that are not msgpack") {
         // 0xc1 is never used in msgpack.
-        CHECK(is_closed(send_raw({0xc1})));
+        CHECK(is_closed(send_raw(*this, {0xc1})));
     }
     SECTION("msgpack that is not msgpack-rpc") {
         msgpack::sbuffer buffer;
         msgpack::pack(buffer, std::tuple{"not", "rpc"});
-        CHECK(is_closed(send_raw({buffer.data(), buffer.data() + buffer.size()})));
+        CHECK(is_closed(send_raw(*this, {buffer.data(), buffer.data() + buffer.size()})));
     }
 
     CHECK(run(client.async_call(api::add(1, 2), asio::use_awaitable)) == 3);
