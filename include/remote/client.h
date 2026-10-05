@@ -40,11 +40,6 @@ public:
     static boost::asio::awaitable<void> connect(std::shared_ptr<client_impl> self, std::string host,
                                                 std::string service);
 
-    /// Sends a request and waits for the response. Returns the handle that owns the result.
-    static boost::asio::awaitable<msgpack::object_handle> transact(std::shared_ptr<client_impl> self,
-                                                                   std::uint32_t msgid,
-                                                                   msgpack::sbuffer request);
-
     template<typename Result>
     static boost::asio::awaitable<Result> call(std::shared_ptr<client_impl> self, std::uint32_t msgid,
                                                msgpack::sbuffer request);
@@ -66,6 +61,11 @@ private:
                                                           std::shared_ptr<connection> conn);
 
     static void attach(const std::shared_ptr<client_impl> &self, boost::asio::ip::tcp::socket socket);
+
+    /// Sends a request and waits for the response. Returns the handle that owns the result.
+    static boost::asio::awaitable<msgpack::object_handle> transact(std::shared_ptr<client_impl> self,
+                                                                   std::uint32_t msgid,
+                                                                   msgpack::sbuffer request);
 
     void fail_pending_calls(const connection *conn, const boost::system::error_code &ec);
 
