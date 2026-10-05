@@ -1,6 +1,8 @@
 #ifndef REMOTE_DETAIL_CONNECTION_H
 #define REMOTE_DETAIL_CONNECTION_H
 
+#include "../options.h"
+
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/ip/tcp.hpp>
 
@@ -19,7 +21,7 @@ namespace remote::detail {
 /// flight at any time.
 class connection : public std::enable_shared_from_this<connection> {
 public:
-    connection(boost::asio::ip::tcp::socket socket, std::size_t max_message_size);
+    connection(boost::asio::ip::tcp::socket socket, const options &opts);
 
     /// Waits for the next complete message. Throws boost::system::system_error when the
     /// connection fails or the peer violates the protocol.

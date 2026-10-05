@@ -88,7 +88,7 @@ void client_impl::attach(const std::shared_ptr<client_impl> &self, boost::asio::
         // The old connection's receive loop fails the calls that are still waiting on it.
         self->connection_->close();
     }
-    self->connection_ = std::make_shared<connection>(std::move(socket), self->options_.max_message_size);
+    self->connection_ = std::make_shared<connection>(std::move(socket), self->options_);
     boost::asio::co_spawn(self->strand_, receive_responses(self, self->connection_), boost::asio::detached);
 }
 

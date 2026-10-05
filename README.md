@@ -128,9 +128,26 @@ Failures are thrown as `boost::system::system_error`. The error code tells you w
 | `remote::error::procedure_failed` | The handler threw. `what()` contains its message. |
 | `remote::error::invalid_result` | The result doesn't convert to the declared result type. |
 | `remote::error::protocol_error` | The peer sent something that isn't msgpack-rpc. |
-| `remote::error::message_too_large` | A message exceeded `remote::options::max_message_size`. |
+| `remote::error::message_too_large` | A response exceeded one of the client's [message limits](#message-limits). A request that exceeds the server's limits closes the connection instead. |
 | `remote::error::timed_out` | No response within `remote::options::call_timeout`. The server may still have run the call. |
 | `boost::asio::error::*` | Transport errors, and `operation_aborted` for cancelled calls. |
+
+## Message limits
+
+A client or server closes the connection when the peer sends a message that exceeds one of these limits:
+
+| Limit | Default | Bounds |
+|---|---|---|
+| `remote::options::max_message_size` | 64 MiB | The size of a message in bytes |
+| `remote::options::max_elements` | 1,048,576 | The number of elements in an array, or entries in a map |
+| Nesting depth | 32 | The levels of nested arrays and maps, counting the message itself and a request's argument array |
+
+What the caller sees depends on which side the limit was exceeded:
+
+- **A response, on the client.** The calls pending on the connection fail with `remote::error::message_too_large`.
+- **A request, on the server.** The server has no way to report the error, so it closes the connection. The client's calls on it fail with a transport error such as `boost::asio::error::eof`, as for any closed connection.
+
+msgpack allocates storage for the elements of an array or map when it reads its header, before the elements arrive. One message can therefore make a connection reserve up to about 32 × `max_elements` × 48 bytes, 1.5 GiB with the defaults. Most of that is address space that is never touched: memory is only used as elements arrive, up to about 24 times the bytes received. When serving untrusted peers, lower `max_elements` and `max_message_size` to what your procedures need.
 
 ## Wire protocol
 

@@ -81,7 +81,7 @@ private:
                 co_await backoff.async_wait(boost::asio::as_tuple(boost::asio::deferred));
                 continue;
             }
-            auto conn = std::make_shared<connection>(std::move(socket), self->options_.max_message_size);
+            auto conn = std::make_shared<connection>(std::move(socket), self->options_);
             {
                 const std::scoped_lock lock{self->mutex_};
                 if (self->stopped_) {
