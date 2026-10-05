@@ -10,21 +10,43 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 
+#include <chrono>
 #include <variant>
 
 namespace remote {
 
 namespace detail {
 
+namespace {
+
+// The point in time a call times out. Zero or negative means never. Timeouts too large to
+// add to the current time also mean never; adding them would overflow the time_point.
+std::chrono::steady_clock::time_point deadline_after(std::chrono::milliseconds timeout) {
+    using clock = std::chrono::steady_clock;
+    if (timeout <= std::chrono::milliseconds::zero()) {
+        return clock::time_point::max();
+    }
+    const auto now = clock::now();
+    // Compare in milliseconds: converting `timeout` to the clock's nanoseconds could overflow.
+    if (timeout >= std::chrono::duration_cast<std::chrono::milliseconds>(clock::time_point::max() - now)) {
+        return clock::time_point::max();
+    }
+    return now + timeout;
+}
+
+}   // namespace
+
 // A call waiting for its response. It lives in the frame of the waiting coroutine and is
 // registered in pending_calls_ while the coroutine waits.
 struct client_impl::pending_call {
-    pending_call(const boost::asio::any_io_executor &executor, const connection *owner)
-            : signal{executor, boost::asio::steady_timer::time_point::max()}
+    pending_call(const boost::asio::any_io_executor &executor, const connection *owner,
+                 std::chrono::steady_clock::time_point deadline)
+            : signal{executor, deadline}
             , conn{owner} {
     }
 
-    // The timer never expires on its own; cancelling it wakes up the waiting coroutine.
+    // The timer expires at the call's deadline. Cancelling it wakes up the waiting coroutine
+    // early, when the response has arrived.
     void complete() {
         done = true;
         signal.cancel();
@@ -76,7 +98,7 @@ boost::asio::awaitable<msgpack::object_handle> client_impl::transact(std::shared
         throw boost::system::system_error{error::not_connected};
     }
 
-    pending_call call{self->strand_, self->connection_.get()};
+    pending_call call{self->strand_, self->connection_.get(), deadline_after(self->options_.call_timeout)};
     self->pending_calls_.emplace(msgid, &call);
     struct unregister {
         ~unregister() { impl.pending_calls_.erase(msgid); }
@@ -86,11 +108,11 @@ boost::asio::awaitable<msgpack::object_handle> client_impl::transact(std::shared
 
     self->connection_->send(std::move(request));
     if (!call.done) {
-        co_await call.signal.async_wait(boost::asio::as_tuple(boost::asio::deferred));
-    }
-    if (!call.done) {
-        // The wait was cancelled by the caller, not by a response.
-        throw boost::system::system_error{boost::asio::error::operation_aborted};
+        auto [ec] = co_await call.signal.async_wait(boost::asio::as_tuple(boost::asio::deferred));
+        if (!call.done) {
+            throw boost::system::system_error{ec ? boost::asio::error::operation_aborted
+                                             : make_error_code(error::timed_out)};
+        }
     }
     if (call.error) {
         std::rethrow_exception(call.error);

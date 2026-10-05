@@ -1,6 +1,7 @@
 #include <remote/remote.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <boost/asio/as_tuple.hpp>
@@ -467,3 +468,77 @@ TEST_CASE_METHOD(fixture, "malformed input closes only the offending connection"
 
     CHECK(run(client.async_call(api::add(1, 2), asio::use_awaitable)) == 3);
 }
+
+TEST_CASE("calls that respond within the call timeout succeed", "[client]") {
+    fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
+    f.connect();
+
+    CHECK(f.run(f.client.async_call(api::delay(1), asio::use_awaitable)) == 1);
+}
+
+TEST_CASE("calls that exceed the call timeout fail with timed_out", "[client]") {
+    fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
+    f.connect();
+
+    CHECK(error_of([&] { f.run(f.client.async_call(api::delay(500), asio::use_awaitable)); })
+          == remote::error::timed_out);
+}
+
+TEST_CASE("late responses to timed-out calls are discarded", "[client]") {
+    fixture f{remote::options{}, remote::options{.call_timeout = 100ms}};
+    f.connect();
+
+    CHECK(error_of([&] { f.run(f.client.async_call(api::delay(300), asio::use_awaitable)); })
+          == remote::error::timed_out);
+
+    // The response to the timed-out call arrives about 200 ms from now. Keep calls in flight
+    // until well past that, so that it arrives while another call is pending. Each call must
+    // still receive its own result.
+    const auto mismatches = f.run([&]() -> asio::awaitable<int> {
+        int count = 0;
+        const auto until = std::chrono::steady_clock::now() + 400ms;
+        for (int milliseconds = 10; std::chrono::steady_clock::now() < until; ++milliseconds) {
+            if (co_await f.client.async_call(api::delay(milliseconds), asio::use_awaitable) != milliseconds) {
+                ++count;
+            }
+        }
+        co_return count;
+    }());
+    CHECK(mismatches == 0);
+}
+
+TEST_CASE("a zero, negative or huge call timeout means no timeout", "[client]") {
+    const auto timeout = GENERATE(0ms, -1ms, std::chrono::milliseconds::max());
+    CAPTURE(timeout.count());
+    fixture f{remote::options{}, remote::options{.call_timeout = timeout}};
+    f.connect();
+
+    CHECK(f.run(f.client.async_call(api::delay(300), asio::use_awaitable)) == 300);
+}
+
+TEST_CASE("calls cancelled by the caller report operation_aborted rather than timed_out", "[client]") {
+    // The call timeout is longer than the caller's own deadline, so the call can only fail
+    // because the caller cancelled it.
+    fixture f{remote::options{}, remote::options{.call_timeout = 500ms}};
+    f.connect();
+
+    // Order of completion, then the call's results, then the timer's result.
+    using race_result = std::tuple<std::array<std::size_t, 2>, std::exception_ptr, int, boost::system::error_code>;
+    const race_result outcome = f.run([&]() -> asio::awaitable<race_result> {
+        asio::steady_timer deadline{co_await asio::this_coro::executor, 20ms};
+        // Unlike operator||, a parallel group reports the result of every operation,
+        // including the one it cancelled.
+        co_return co_await asio::experimental::make_parallel_group(
+                f.client.async_call(api::delay(200), asio::deferred),
+                deadline.async_wait(asio::deferred))
+            .async_wait(asio::experimental::wait_for_one(), asio::use_awaitable);
+    }());
+
+    const auto &[order, call_error, call_result, timer_error] = outcome;
+    CHECK(order[0] == 1);   // the caller's deadline fired first
+    CHECK(!timer_error);
+    REQUIRE(call_error);
+    const std::exception_ptr error = call_error;
+    CHECK(error_of([&] { std::rethrow_exception(error); }) == asio::error::operation_aborted);
+}
+
