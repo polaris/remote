@@ -183,6 +183,8 @@ cmake --build --preset conan-debug
 ctest --preset conan-debug
 ```
 
+On Windows, activate the environment with `.venv\Scripts\activate`. With MSVC, Conan names the configure preset `conan-default`, so configure with `cmake --preset conan-default`; the build and test presets stay `conan-debug`.
+
 CMake options:
 
 | Option | Default | Description |
@@ -222,7 +224,7 @@ cd build/tsan && TSAN_OPTIONS=halt_on_error=1 ctest --output-on-failure
 
 `halt_on_error=1` stops at the first data race. Without it, ThreadSanitizer reports the race and continues, and the corrupted state can hang the test instead of failing it. For `address,undefined`, use a second build directory.
 
-CI builds and tests with GCC and Clang on Linux and with Apple Clang on macOS. It also runs the tests under AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer, and runs clang-tidy with findings treated as errors.
+CI builds and tests with GCC and Clang on Linux, with Apple Clang on macOS and with MSVC on Windows. It also runs the tests under AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer, and runs clang-tidy with findings treated as errors.
 
 ### Using remote in your project
 
