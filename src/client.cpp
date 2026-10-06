@@ -103,7 +103,9 @@ boost::asio::awaitable<msgpack::object_handle> client_impl::transact(std::shared
     // A timeout set on the invocation overrides the client's default.
     const auto deadline = deadline_after(timeout.value_or(self->options_.call_timeout));
     pending_call call{self->strand_, self->connection_.get(), deadline};
-    self->pending_calls_.emplace(msgid, &call);
+    if (!self->pending_calls_.emplace(msgid, &call).second) {
+        throw boost::system::system_error{error::msgid_in_use};
+    }
     const boost::scope::scope_exit unregister{[&] { self->pending_calls_.erase(msgid); }};
 
     self->connection_->send(std::move(request));
