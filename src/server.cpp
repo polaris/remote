@@ -36,15 +36,20 @@ public:
         local_endpoint_ = acceptor_.local_endpoint();
     }
 
-    void add_handler(std::string_view name, procedure_handler handler) {
+    void add_handler(std::string_view name, procedure_handler &&handler) {
         if (started_) {
             throw std::logic_error{"procedures must be added before the server is started"};
         }
-        handlers_.insert_or_assign(std::string{name}, std::move(handler));
+        const auto [it, inserted] = handlers_.try_emplace(std::string{name}, std::move(handler));
+        if (!inserted) {
+            throw std::logic_error{"procedure '" + std::string{name} + "' is already registered"};
+        }
     }
 
     void start() {
-        started_ = true;
+        if (std::exchange(started_, true)) {
+            throw std::logic_error{"the server has already been started"};
+        }
         boost::asio::co_spawn(acceptor_.get_executor(), accept(shared_from_this()), boost::asio::detached);
     }
 
@@ -200,7 +205,7 @@ server::executor_type server::get_executor() const {
     return impl_->executor();
 }
 
-void server::add_handler(std::string_view name, detail::procedure_handler handler) {
+void server::add_handler(std::string_view name, detail::procedure_handler &&handler) {
     impl_->add_handler(name, std::move(handler));
 }
 

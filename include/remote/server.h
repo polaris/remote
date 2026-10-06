@@ -114,11 +114,12 @@ public:
     /// boost::asio::awaitable of the result for handlers that need to wait for I/O. Exceptions
     /// thrown by the handler are reported to the caller as error::procedure_failed.
     ///
-    /// Must be called before start().
+    /// Must be called before start(). Throws std::logic_error if the server has been started
+    /// or a procedure with the same name is already registered.
     template<typename Result, typename... Args, typename Handler>
     void add_procedure(const procedure<Result(Args...)> &proc, Handler handler);
 
-    /// Starts accepting connections.
+    /// Starts accepting connections. Throws std::logic_error if the server has been started.
     void start();
 
     /// Stops accepting connections and closes all open connections. Thread-safe.
@@ -129,7 +130,7 @@ public:
     executor_type get_executor() const;
 
 private:
-    void add_handler(std::string_view name, detail::procedure_handler handler);
+    void add_handler(std::string_view name, detail::procedure_handler &&handler);
 
     std::shared_ptr<detail::server_impl> impl_;
 };
