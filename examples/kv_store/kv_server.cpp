@@ -53,7 +53,12 @@ int main(int argc, char *argv[]) {
 
         std::cout << "listening on " << server.local_endpoint() << '\n' << std::flush;
 
-        std::vector<std::jthread> pool;
+        std::vector<std::thread> pool;
+        const auto join_all = [&pool] {
+            for (auto &thread : pool) {
+                thread.join();
+            }
+        };
         try {
             for (unsigned i = 0; i < thread_count; ++i) {
                 pool.emplace_back([&io, &failed]() {
@@ -68,8 +73,10 @@ int main(int argc, char *argv[]) {
             }
         } catch (...) {
             io.stop();
+            join_all();
             throw;
         }
+        join_all();
     } catch (const std::exception &ex) {
         std::cerr << "error: " << ex.what() << '\n';
         return 1;

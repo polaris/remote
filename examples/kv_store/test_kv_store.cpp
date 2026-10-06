@@ -66,12 +66,15 @@ TEST_CASE("kv_store is safe under concurrent access", "[kv_store][stress]") {
     }
     {
         constexpr int thread_count = 4;
-        std::vector<std::jthread> threads;        // ...then start the threads
+        std::vector<std::thread> threads;         // ...then start the threads
         threads.reserve(thread_count);
         for (int t = 0; t < thread_count; ++t) {
             threads.emplace_back([&io] { io.run(); });
         }
-    }                                             // joins: all work done
+        for (auto &thread : threads) {
+            thread.join();                        // all work done
+        }
+    }
 
     for (auto &result : results) {
         REQUIRE_NOTHROW(result.get());            // rethrows worker failures here

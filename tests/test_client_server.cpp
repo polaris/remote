@@ -52,7 +52,7 @@ struct log_entry {
     std::uint64_t term = 0;
     std::uint64_t index = 0;
     std::string command;
-    MSGPACK_DEFINE(term, index, command);
+    MSGPACK_DEFINE(term, index, command)
 };
 
 struct append_entries_request {
@@ -62,13 +62,13 @@ struct append_entries_request {
     std::uint64_t prev_log_term = 0;
     std::vector<log_entry> entries;
     std::uint64_t leader_commit = 0;
-    MSGPACK_DEFINE(term, leader_id, prev_log_index, prev_log_term, entries, leader_commit);
+    MSGPACK_DEFINE(term, leader_id, prev_log_index, prev_log_term, entries, leader_commit)
 };
 
 struct append_entries_response {
     std::uint64_t term = 0;
     bool success = false;
-    MSGPACK_DEFINE(term, success);
+    MSGPACK_DEFINE(term, success)
 };
 
 inline constexpr remote::procedure<int(int, int)> add{"add"};
@@ -650,13 +650,18 @@ TEST_CASE("with_timeout applies to blocking calls", "[client][timeout]") {
     // call() blocks this thread until the response arrives, so another thread has to run the
     // io_context. The server's pending accept keeps run() busy until it is stopped.
     f.io.restart();
-    const std::jthread io_thread{[&f] { f.io.run(); }};
+    // std::thread rather than std::jthread: Apple's libc++ still marks jthread experimental.
+    std::thread io_thread{[&f] { f.io.run(); }};
     // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions): local scope guard, never copied
-    struct stop_on_exit {
-        ~stop_on_exit() { io.stop(); }
+    struct stop_and_join {
+        ~stop_and_join() {
+            io.stop();      // stop first, so the join cannot hang
+            thread.join();
+        }
         asio::io_context &io;
+        std::thread &thread;
     };
-    const stop_on_exit stopper{f.io};   // destroyed before io_thread, so the join below cannot hang
+    const stop_and_join guard{.io = f.io, .thread = io_thread};
 
     CHECK(f.client.call(api::delay(300).with_timeout(1s)) == 300);
 }
