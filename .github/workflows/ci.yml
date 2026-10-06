@@ -26,6 +26,11 @@ jobs:
             os: macos-15
             cc: clang
             cxx: clang++
+          # No cc/cxx: Conan and CMake detect MSVC themselves. Visual Studio is a multi-config
+          # generator, for which Conan names the configure preset conan-default.
+          - name: Windows MSVC
+            os: windows-2025
+            configure_preset: conan-default
           - name: Address and UB sanitizers
             os: ubuntu-24.04
             cc: clang
@@ -70,7 +75,7 @@ jobs:
         run: conan install . --build=missing -s build_type=Debug -s compiler.cppstd=20
 
       - name: Configure
-        run: cmake --preset conan-debug -DREMOTE_WARNINGS_AS_ERRORS=ON ${{ matrix.cmake_options }}
+        run: cmake --preset ${{ matrix.configure_preset || 'conan-debug' }} -DREMOTE_WARNINGS_AS_ERRORS=ON ${{ matrix.cmake_options }}
 
       - name: Build
         run: cmake --build --preset conan-debug --parallel
