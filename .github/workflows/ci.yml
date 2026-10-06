@@ -48,9 +48,9 @@ jobs:
       # Stop at the first data race instead of continuing with corrupted state.
       TSAN_OPTIONS: ${{ matrix.tsan_options }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -61,7 +61,7 @@ jobs:
           pip install -r requirements.txt
           conan profile detect
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.conan2/p
           key: conan-${{ matrix.os }}-${{ matrix.cc }}-${{ hashFiles('conanfile.py') }}
@@ -83,9 +83,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -96,7 +96,7 @@ jobs:
           pip install -r requirements.txt
           conan profile detect
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.conan2/p
           key: conan-package-${{ hashFiles('conanfile.py') }}
