@@ -30,6 +30,8 @@ public:
                 return "invalid result";
             case error::timed_out:
                 return "timed out";
+            case error::msgid_in_use:
+                return "message id in use";
         }
         return "unknown error";
     }

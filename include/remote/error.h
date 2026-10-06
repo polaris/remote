@@ -20,6 +20,7 @@ enum class error {
     procedure_failed = 6,   ///< The procedure threw an exception.
     invalid_result = 7,     ///< The result cannot be converted to the declared result type.
     timed_out = 8,          ///< The operation did not complete within the configured timeout.
+    msgid_in_use = 9,       ///< The message id is still in use by a pending call.
 };
 
 const boost::system::error_category &error_category() noexcept;

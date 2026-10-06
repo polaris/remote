@@ -130,6 +130,7 @@ Failures are thrown as `boost::system::system_error`. The error code tells you w
 | `remote::error::protocol_error` | The peer sent something that isn't msgpack-rpc. |
 | `remote::error::message_too_large` | A response exceeded one of the client's [message limits](#message-limits). A request that exceeds the server's limits closes the connection instead. |
 | `remote::error::timed_out` | No response within `remote::options::call_timeout`. The server may still have run the call. |
+| `remote::error::msgid_in_use` | The message ID of the call is already in use. |
 | `boost::asio::error::*` | Transport errors, and `operation_aborted` for cancelled calls. |
 
 ## Message limits

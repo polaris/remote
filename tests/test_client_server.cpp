@@ -32,6 +32,17 @@ namespace asio = boost::asio;
 using namespace asio::experimental::awaitable_operators;
 using namespace std::chrono_literals;
 
+namespace remote::detail {
+
+// Reaches into a client for tests; the friend declarations are in client.h.
+struct client_test_access {
+    static void set_next_msgid(client &c, std::uint32_t msgid) {
+        c.impl_->next_msgid_.store(msgid, std::memory_order_relaxed);
+    }
+};
+
+}   // namespace remote::detail
+
 namespace {
 
 // The procedures used by the tests, declared once for client and server.
@@ -151,6 +162,16 @@ boost::system::error_code error_of(const std::function<void()> &f) {
         return ex.code();
     }
     return {};
+}
+
+// Completes with the error code of a call instead of throwing it.
+asio::awaitable<boost::system::error_code> error_code_of(asio::awaitable<int> call) {
+    try {
+        co_await std::move(call);
+    } catch (const boost::system::system_error &ex) {
+        co_return ex.code();
+    }
+    co_return boost::system::error_code{};
 }
 
 boost::system::error_code send_raw(fixture &f, const std::vector<std::uint8_t> &bytes) {
@@ -638,4 +659,22 @@ TEST_CASE("with_timeout applies to blocking calls", "[client][timeout]") {
     const stop_on_exit stopper{f.io};   // destroyed before io_thread, so the join below cannot hang
 
     CHECK(f.client.call(api::delay(300).with_timeout(1s)) == 300);
+}
+
+TEST_CASE_METHOD(fixture, "calls fail when their msgid is still in use", "[client]") {
+    connect();
+
+    using outcome = std::tuple<int, boost::system::error_code>;
+    const auto [pending_result, clashing_error] = run([&]() -> asio::awaitable<outcome> {
+        // Simulates the counter wrapping around while a call is pending: both calls get msgid 7.
+        // The msgid is taken when async_call is called; the calls start when they are awaited.
+        remote::detail::client_test_access::set_next_msgid(client, 7);
+        auto pending = client.async_call(api::delay(100), asio::use_awaitable);
+        remote::detail::client_test_access::set_next_msgid(client, 7);
+        auto clashing = client.async_call(api::add(1, 2), asio::use_awaitable);
+        co_return co_await (std::move(pending) && error_code_of(std::move(clashing)));
+    }());
+
+    CHECK(clashing_error == remote::error::msgid_in_use);
+    CHECK(pending_result == 100);   // the pending call still receives its own result
 }

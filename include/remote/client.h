@@ -30,6 +30,9 @@ namespace detail {
 
 class connection;
 
+/// Gives tests access to internals. Defined only by the tests.
+struct client_test_access;
+
 class client_impl : public std::enable_shared_from_this<client_impl> {
 public:
     client_impl(const boost::asio::any_io_executor &executor, const options &opts);
@@ -56,6 +59,8 @@ public:
     const boost::asio::any_io_executor &strand() const noexcept { return strand_; }
 
 private:
+    friend struct client_test_access;
+
     struct pending_call;
 
     static boost::asio::awaitable<void> receive_responses(std::shared_ptr<client_impl> self,
@@ -161,6 +166,8 @@ public:
     executor_type get_executor() const noexcept;
 
 private:
+    friend struct detail::client_test_access;
+
     std::shared_ptr<detail::client_impl> impl_;
 };
 
