@@ -348,6 +348,28 @@ TEST_CASE("blocking calls can be made from many threads", "[client][server]") {
     }
 }
 
+TEST_CASE("servers reject a procedure registered twice", "[server]") {
+    asio::io_context io;
+    remote::server server{io.get_executor(), {asio::ip::address_v4::loopback(), 0}};
+    server.add_procedure(api::add, [](int a, int b) { return a + b; });
+    CHECK_THROWS_WITH(server.add_procedure(api::add, [](int a, int b) { return a * b; }),
+        Catch::Matchers::ContainsSubstring("already registered"));
+}
+
+TEST_CASE("servers reject a second start", "[server]") {
+    asio::io_context io;
+    remote::server server{io.get_executor(), {asio::ip::address_v4::loopback(), 0}};
+    server.start();
+    CHECK_THROWS_WITH(server.start(), Catch::Matchers::ContainsSubstring("already been started"));
+}
+
+TEST_CASE_METHOD(fixture, "servers reject procedures added after start", "[server]") {
+    CHECK_THROWS_WITH(server.add_procedure(api::ping, [] {}),
+        Catch::Matchers::ContainsSubstring("before the server is started"));
+    connect();
+    CHECK(run(client.async_call(api::add(2, 3), asio::use_awaitable)) == 5);
+}
+
 TEST_CASE_METHOD(fixture, "large messages span many reads", "[client][server]") {
     connect();
 
